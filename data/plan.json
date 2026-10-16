@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-16T17:02:42.614Z",
+    "savedAt": "2026-10-16T17:03:17.262Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -148,17 +148,6 @@
       "updatedAt": "2026-10-16T14:49:43.423Z",
       "updatedBy": "bernieonline"
     },
-    "t_lpuuwg8d": {
-      "title": "Files/Folders and Requested Topics",
-      "category": "WB",
-      "presenter": "BG",
-      "notesUrl": "",
-      "slidesUrl": "",
-      "briefing": "",
-      "invitesSent": false,
-      "updatedAt": "2026-10-16T14:52:14.685Z",
-      "updatedBy": "bernieonline"
-    },
     "t_ns7ljv4c": {
       "title": "GBCC AGM",
       "category": "EV",
@@ -297,19 +286,6 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-10-16T14:50:12.975Z",
-      "updatedBy": "bernieonline"
-    },
-    "2026-11_FCC_WB": {
-      "topicId": "t_lpuuwg8d",
-      "club": "FCC",
-      "category": "WB",
-      "month": "2026-11",
-      "date": "2026-11-17",
-      "start": "12:30",
-      "end": "14:00",
-      "status": "planned",
-      "moved": false,
-      "updatedAt": "2026-10-16T14:52:25.248Z",
       "updatedBy": "bernieonline"
     },
     "2026-11_GBCC_WM": {
