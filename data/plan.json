@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-16T17:02:30.531Z",
+    "savedAt": "2026-10-16T17:02:42.614Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -191,17 +191,6 @@
       "briefing": "",
       "invitesSent": false,
       "updatedAt": "2026-10-16T16:09:32.069Z",
-      "updatedBy": "bernieonline"
-    },
-    "t_19q3jak2": {
-      "title": "Test Topic",
-      "category": "WM",
-      "presenter": "BG",
-      "notesUrl": "",
-      "slidesUrl": "",
-      "briefing": "",
-      "invitesSent": false,
-      "updatedAt": "2026-10-16T16:59:46.848Z",
       "updatedBy": "bernieonline"
     }
   },
