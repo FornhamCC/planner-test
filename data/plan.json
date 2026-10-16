@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-16T17:16:38.627Z",
+    "savedAt": "2026-10-16T17:18:27.420Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -166,10 +166,10 @@
       "notesUrl": "",
       "slidesUrl": "",
       "briefing": "",
-      "invitesSent": false,
-      "updatedAt": "2026-10-16T15:05:21.170Z",
+      "invitesSent": true,
+      "updatedAt": "2026-10-16T17:18:25.409Z",
       "updatedBy": "bernieonline",
-      "invitesSentAt": ""
+      "invitesSentAt": "2026-10-16T17:18:25.409Z"
     },
     "t_odd3rs20": {
       "title": "FCC AGM",
