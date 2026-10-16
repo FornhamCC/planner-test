@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-16T15:05:02.126Z",
+    "savedAt": "2026-10-16T15:05:23.207Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -171,15 +171,16 @@
       "updatedBy": "bernieonline"
     },
     "t_3fvix40s": {
-      "title": "Combined Topis",
+      "title": "Combined Topic",
       "category": "EV",
       "presenter": "BG",
       "notesUrl": "",
       "slidesUrl": "",
       "briefing": "",
       "invitesSent": false,
-      "updatedAt": "2026-10-16T15:05:00.111Z",
-      "updatedBy": "bernieonline"
+      "updatedAt": "2026-10-16T15:05:21.170Z",
+      "updatedBy": "bernieonline",
+      "invitesSentAt": ""
     }
   },
   "sessions": {
