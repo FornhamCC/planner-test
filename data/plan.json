@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-16T17:04:37.834Z",
+    "savedAt": "2026-10-16T17:05:27.315Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -180,17 +180,6 @@
       "briefing": "",
       "invitesSent": false,
       "updatedAt": "2026-10-16T16:09:32.069Z",
-      "updatedBy": "bernieonline"
-    },
-    "t_iex51muo": {
-      "title": "Test Topic",
-      "category": "WM",
-      "presenter": "BG",
-      "notesUrl": "",
-      "slidesUrl": "",
-      "briefing": "",
-      "invitesSent": false,
-      "updatedAt": "2026-10-16T17:03:50.033Z",
       "updatedBy": "bernieonline"
     }
   },
@@ -375,32 +364,6 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-10-16T16:46:13.185Z",
-      "updatedBy": "bernieonline"
-    },
-    "2027-01_GBCC_WM": {
-      "topicId": "t_iex51muo",
-      "club": "GBCC",
-      "category": "WM",
-      "month": "2027-01",
-      "date": "2027-01-18",
-      "start": "14:00",
-      "end": "16:00",
-      "status": "planned",
-      "moved": false,
-      "updatedAt": "2026-10-16T17:04:12.747Z",
-      "updatedBy": "bernieonline"
-    },
-    "2027-01_FCC_WM": {
-      "topicId": "t_iex51muo",
-      "club": "FCC",
-      "category": "WM",
-      "month": "2027-01",
-      "date": "2027-01-19",
-      "start": "14:00",
-      "end": "16:00",
-      "status": "planned",
-      "moved": false,
-      "updatedAt": "2026-10-16T17:04:35.828Z",
       "updatedBy": "bernieonline"
     }
   }
