@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-16T14:22:36.850Z",
+    "savedAt": "2026-10-16T14:23:44.616Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -182,10 +182,10 @@
       "month": "2026-10",
       "date": "2026-10-19",
       "start": "12:30",
-      "end": "14:00",
+      "end": "14:30",
       "status": "planned",
-      "moved": false,
-      "updatedAt": "2026-10-16T14:22:34.834Z",
+      "moved": true,
+      "updatedAt": "2026-10-16T14:23:42.593Z",
       "updatedBy": "bernieonline"
     },
     "2026-10_FCC_WB": {
