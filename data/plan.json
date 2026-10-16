@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-16T14:56:09.564Z",
+    "savedAt": "2026-10-16T14:56:24.083Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -167,17 +167,6 @@
       "briefing": "",
       "invitesSent": false,
       "updatedAt": "2026-10-16T14:52:14.685Z",
-      "updatedBy": "bernieonline"
-    },
-    "t_owau7b53": {
-      "title": "AGM",
-      "category": "IB",
-      "presenter": "BG",
-      "notesUrl": "",
-      "slidesUrl": "",
-      "briefing": "",
-      "invitesSent": false,
-      "updatedAt": "2026-10-16T14:53:12.143Z",
       "updatedBy": "bernieonline"
     }
   },
