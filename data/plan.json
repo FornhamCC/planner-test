@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-16T14:48:56.804Z",
+    "savedAt": "2026-10-16T14:49:45.447Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -145,6 +145,17 @@
       "briefing": "",
       "invitesSent": false,
       "updatedAt": "2026-10-16T13:55:07.357Z",
+      "updatedBy": "bernieonline"
+    },
+    "t_eeejkib2": {
+      "title": "Latest AI Features",
+      "category": "EV",
+      "presenter": "BG",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "invitesSent": false,
+      "updatedAt": "2026-10-16T14:49:43.423Z",
       "updatedBy": "bernieonline"
     }
   },
