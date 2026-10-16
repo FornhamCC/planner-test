@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-16T14:58:40.831Z",
+    "savedAt": "2026-10-16T14:59:22.395Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -126,16 +126,6 @@
     "firstMonth": "2027-01"
   },
   "topics": {
-    "t_agm2027": {
-      "title": "Club AGM",
-      "category": "EV",
-      "presenter": "",
-      "notesUrl": "",
-      "slidesUrl": "",
-      "briefing": "The Fornham Computer Club Annual General Meeting takes the place of this month's Windows sessions. Times to be confirmed.",
-      "updatedAt": "2026-10-15T13:00:00Z",
-      "updatedBy": "initial setup"
-    },
     "t_d68y9084": {
       "title": "Drop IN Session",
       "category": "EV",
@@ -182,32 +172,6 @@
     }
   },
   "sessions": {
-    "2027-01_FCC_WB": {
-      "topicId": "t_agm2027",
-      "club": "FCC",
-      "category": "WB",
-      "month": "2027-01",
-      "date": "2027-01-19",
-      "start": "14:00",
-      "end": "16:00",
-      "status": "planned",
-      "moved": true,
-      "updatedAt": "2026-10-15T14:23:12.103Z",
-      "updatedBy": "bernieonline"
-    },
-    "2027-01_FCC_WM": {
-      "topicId": "t_agm2027",
-      "club": "FCC",
-      "category": "WM",
-      "month": "2027-01",
-      "date": "2027-01-19",
-      "start": "15:00",
-      "end": "17:00",
-      "status": "planned",
-      "moved": true,
-      "updatedAt": "2026-10-15T14:32:25.168Z",
-      "updatedBy": "bernieonline"
-    },
     "2026-10_FCC_WB": {
       "topicId": "t_d68y9084",
       "club": "FCC",
