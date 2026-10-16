@@ -490,7 +490,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
   box-shadow: 0 12px 32px rgba(0,0,0,.2); display: flex; flex-direction: column;
 }
 .menu-item {
-  display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px;
+  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px;
   border: 0; border-radius: 8px; background: transparent; text-align: left; font-size: 15px;
 }
 .menu-item:hover, .menu-item:focus-visible { background: var(--bronze-chip); outline: none; }
@@ -500,6 +500,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .test-banner { background: #5C4220; color: #FFFFFF; font-weight: 700; font-size: 14px; text-align: center; padding: 4px 12px; }
 .check-row { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; min-height: var(--touch); cursor: pointer; }
 .check-row input { width: 22px; height: 22px; accent-color: var(--ok); }
+.sheet-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.sheet-actions .btn { min-height: 40px; padding: 0 12px; font-size: 14px; background: rgba(255,255,255,.85); }
 .danger-zone { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
 
 /* --- Fit the board to the iPad's width (Nice to Have 1) ----------------------
@@ -2080,10 +2082,20 @@ function renderDetails() {
   const club = session ? clubOf(session.club) : null;
   const editing = d.editing && canEdit();
 
+  // In Edit mode the heading carries the tile's actions, so they are in view as
+  // soon as the panel opens (on the iPad this is how to move, copy or remove).
+  // They close the panel first; unsaved edits in it are dropped, so save first.
+  const actions = editing ? el('div', { class: 'sheet-actions' },
+    session
+      ? el('button', { type: 'button', class: 'btn', on: { click: () => startMove(d.key) } }, icon('remove'), 'Move to…')
+      : el('button', { type: 'button', class: 'btn', on: { click: () => startPlace(d.topicId) } }, icon('plus'), 'Place on board…'),
+    el('button', { type: 'button', class: 'btn', on: { click: () => { closeDetails(); copyTopic(d.topicId); } } }, icon('copy'), 'Copy'),
+    session ? el('button', { type: 'button', class: 'btn', on: { click: () => removeSession(d.key) } }, icon('trash'), 'Remove from board') : null) : null;
   const head = el('div', { class: 'sheet-head', vars: colourVars(cat) },
     el('div', { class: 'top' },
       el('span', { class: 'cat-chip', text: cat.name }),
       el('button', { type: 'button', class: 'btn btn-quiet btn-icon', attrs: { 'aria-label': 'Close' }, on: { click: closeDetails } }, icon('close'))),
+    actions,
     editing
       ? el('label', { class: 'field', attrs: { style: 'color:var(--ink-c)' } }, 'Topic title',
           el('input', { class: 'input', id: 'fTitle', value: topic.title, maxLength: LIMITS.title, attrs: { style: 'font-size:20px;font-weight:700', required: true } }),
@@ -2141,14 +2153,8 @@ function renderDetails() {
         el('div', { class: 'inner' },
           el('label', { class: 'visually-hidden', htmlFor: 'fBriefing', text: 'Briefing text' }),
           el('textarea', { class: 'input', id: 'fBriefing', rows: 7, maxLength: LIMITS.briefing, value: topic.briefing || '' }))),
-      // Actions on this tile or topic. They close the panel first; any unsaved
-      // edits in the panel are dropped, so save before using them.
+      // Delete stays at the foot, away from the everyday actions in the heading.
       el('div', { class: 'danger-zone' },
-        session
-          ? el('button', { type: 'button', class: 'btn', on: { click: () => startMove(d.key) } }, icon('remove'), 'Move to…')
-          : el('button', { type: 'button', class: 'btn', on: { click: () => startPlace(d.topicId) } }, icon('plus'), 'Place on board…'),
-        el('button', { type: 'button', class: 'btn', on: { click: () => { closeDetails(); copyTopic(d.topicId); } } }, icon('copy'), 'Copy'),
-        session ? el('button', { type: 'button', class: 'btn', on: { click: () => removeSession(d.key) } }, icon('trash'), 'Remove from board') : null,
         el('button', { type: 'button', class: 'btn btn-danger-text', on: { click: () => deleteTopic(d.topicId) } }, icon('trash'), 'Delete topic')));
     if (session) body.querySelector('#fStatus').value = session.status || 'planned';
   } else {
@@ -2843,6 +2849,9 @@ function onPointerMove(e) {
     return;
   }
   e.preventDefault();
+  // How far the finger has wandered since the tile lifted: if it is released
+  // without really moving, the press-and-hold means "show the menu", not "drag".
+  d.wander = Math.max(d.wander || 0, Math.hypot(d.x - d.liftX, d.y - d.liftY));
   positionGhost();
   updateHover();
 }
@@ -2859,6 +2868,7 @@ function startDrag() {
   const d = state.drag;
   clearTimeout(d.holdTimer);
   d.active = true;
+  d.liftX = d.x; d.liftY = d.y; d.wander = 0;
   state.pick = null; state.cursorKey = null; state.prompt = null;
   // Grabbing from the sliding tray: hide the tray so the board is free to drop on.
   const tray = document.getElementById('tray');
@@ -2936,6 +2946,17 @@ function autoScroll() {
 function finishDrag(cancelled) {
   const d = state.drag;
   const key = d.overKey, overTray = d.overTray, source = d.source;
+  // iPad: press-and-hold then lift without moving opens the actions menu, like a
+  // right-click on the PC (Edit details, Move to…, Copy, Remove from board).
+  if (!cancelled && d.pointerType !== 'mouse' && (d.wander || 0) < DRAG.holdSlop * 2) {
+    const x = d.x, y = d.y;
+    cleanUpDrag();
+    suppressClickUntil = Date.now() + 250;
+    render();
+    if (source.kind === 'tile') openTileMenu(source.key, x, y);
+    else openTrayMenu(source.topicId, x, y);
+    return;
+  }
   const valid = !cancelled && key && d.targets.has(key);
   const refusedHere = !cancelled && key && !valid && !(source.kind === 'tile' && key === source.key);
   cleanUpDrag();
