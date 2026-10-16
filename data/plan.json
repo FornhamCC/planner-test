@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-16T15:06:24.944Z",
+    "savedAt": "2026-10-16T16:09:34.076Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -181,6 +181,17 @@
       "updatedAt": "2026-10-16T15:05:21.170Z",
       "updatedBy": "bernieonline",
       "invitesSentAt": ""
+    },
+    "t_odd3rs20": {
+      "title": "FCC AGM",
+      "category": "EV",
+      "presenter": "BG",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "invitesSent": false,
+      "updatedAt": "2026-10-16T16:09:32.069Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
