@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Date engine tests</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; padding: 20px; background: #F6F3EE; color: #1C1B19; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  .summary { font-size: 18px; font-weight: 700; padding: 12px 16px; border-radius: 10px; margin: 12px 0 20px; }
+  .pass { background: #E4F2E6; color: #1E5527; }
+  .fail { background: #FBE9E7; color: #A12C22; }
+  h2 { font-size: 17px; margin: 20px 0 6px; }
+  table { border-collapse: collapse; width: 100%; background: #FFFFFF; font-size: 14px; }
+  th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid #E2DCD2; vertical-align: top; }
+  td.ok { color: #1E5527; font-weight: 700; } td.bad { color: #A12C22; font-weight: 700; }
+  .note { color: #5E5A54; font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>Date engine tests</h1>
+<p class="note">Reads the date engine directly from the board's index.html (between the DATE-ENGINE-START and
+DATE-ENGINE-END markers) and checks every month from September 2026 to July 2028. Open this page from the
+board's web address, for example fornhamcomputerclub.com/planner/tests/.</p>
+<div id="summary" class="summary">Running…</div>
+<div id="results"></div>
+
+<script>
+'use strict';
+/* Each test is [section, description, function]. A test passes when its function
+   returns true; returning a string (or throwing) is a failure with that explanation. */
+const tests = [];
+function test(section, name, fn) { tests.push([section, name, fn]); }
+function eq(actual, expected) {
+  const a = JSON.stringify(actual), e = JSON.stringify(expected);
+  return a === e ? true : 'expected ' + e + ', got ' + a;
+}
+
+async function loadEngine() {
+  // Fetch the board's own file and take the text between the markers.
+  const text = await (await fetch('../index.html', { cache: 'no-store' })).text();
+  const start = text.indexOf('/* DATE-ENGINE-START */');
+  const end = text.indexOf('/* DATE-ENGINE-END */');
+  if (start < 0 || end < 0) throw new Error('Date engine markers not found in index.html');
+  // new Function runs that text in its own scope and hands back the DateEngine object.
+  return new Function(text.slice(start, end) + '\nreturn DateEngine;')();
+}
+
+async function loadSettings() {
+  const data = await (await fetch('../data/plan.json', { cache: 'no-store' })).json();
+  return data.settings;
+}
+
+function defineTests(E, S) {
+  const groups = [];
+  S.clubs.forEach(c => S.categories.forEach(k => groups.push([c.code, k.code])));
+
+  /* --- Known dates, worked out by hand from a calendar ------------------- */
+  const known = [
+    // month,   Windows GBCC/FCC,            iPad GBCC/FCC,               why it matters
+    ['2026-09', '2026-09-21', '2026-09-22', '2026-09-28', '2026-09-29', 'month starts on a Tuesday'],
+    ['2026-10', '2026-10-19', '2026-10-20', '2026-10-26', '2026-10-27', 'design statement example'],
+    ['2026-11', '2026-11-23', '2026-11-17', '2026-11-30', '2026-11-24', 'Mon 30 Nov is the last day: GBCC keeps it, FCC\'s Tuesdays come a week earlier'],
+    ['2027-01', '2027-01-18', '2027-01-19', '2027-01-25', '2027-01-26', 'first month planned; AGM on Tue 19'],
+    ['2027-02', '2027-02-15', '2027-02-16', '2027-02-22', '2027-02-23', 'February with 28 days, starting on a Monday'],
+    ['2027-03', '2027-03-22', '2027-03-23', '2027-03-29', '2027-03-30', 'design statement example; last Tuesday is the 30th'],
+    ['2027-05', '2027-05-24', '2027-05-18', '2027-05-31', '2027-05-25', 'Mon 31 May is the last day (Spring Bank Holiday)'],
+    ['2028-01', '2028-01-24', '2028-01-18', '2028-01-31', '2028-01-25', 'Mon 31 Jan is the last day, like November 2026'],
+    ['2028-02', '2028-02-21', '2028-02-22', '2028-02-28', '2028-02-29', 'leap year: the iPad Tuesday is 29 February']
+  ];
+  known.forEach(([month, wMon, wTue, iMon, iTue, why]) => {
+    test('Known dates', E.formatMonth(month) + ' — ' + why, () => {
+      const got = [
+        E.sessionDate(S, month, 'GBCC', 'WB').date, E.sessionDate(S, month, 'FCC', 'WB').date,
+        E.sessionDate(S, month, 'GBCC', 'IB').date, E.sessionDate(S, month, 'FCC', 'IB').date
+      ];
+      return eq(got, [wMon, wTue, iMon, iTue]);
+    });
+  });
+
+  /* --- Break months: no sessions for any group ---------------------------- */
+  E.monthsBetween('2026-09', '2028-07').filter(m => [7, 8, 12].includes(E.parseMonth(m).month)).forEach(month => {
+    test('Break months', E.formatMonth(month) + ' has no sessions in any of the 8 groups', () => {
+      if (!E.isBreakMonth(S, month)) return 'not recognised as a break month';
+      const found = groups.filter(([c, k]) => E.sessionDate(S, month, c, k) !== null);
+      return found.length ? 'sessions found for ' + found.join(', ') : true;
+    });
+  });
+
+  /* --- Every meeting month, checked against an independent rule ------------
+     Independent rule: list the month's Mondays (GBCC) and Tuesdays (FCC) by
+     stepping through every day; iPad takes the club's last one, Windows the one
+     before. Also checks no date is past the month end and that each club's
+     Windows and iPad sessions are in successive weeks. */
+  E.monthsBetween('2026-09', '2028-07').filter(m => !E.isBreakMonth(S, m)).forEach(month => {
+    test('Every month Sep 2026 – Jul 2028', E.formatMonth(month), () => {
+      const { year, month: mo } = E.parseMonth(month);
+      const last = new Date(Date.UTC(year, mo, 0)).getUTCDate();
+      const days = { GBCC: [], FCC: [] };
+      for (let d = 1; d <= last; d++) {
+        const wd = new Date(Date.UTC(year, mo - 1, d)).getUTCDay();
+        if (wd === 1) days.GBCC.push(d);
+        if (wd === 2) days.FCC.push(d);
+      }
+      for (const club of ['GBCC', 'FCC']) {
+        const list = days[club];
+        const want = { WB: list[list.length - 2], WM: list[list.length - 2], IB: list[list.length - 1], IM: list[list.length - 1] };
+        for (const k of ['WB', 'WM', 'IB', 'IM']) {
+          const s = E.sessionDate(S, month, club, k);
+          if (!s) return 'no date for ' + club + ' ' + k;
+          if (s.weekday !== (club === 'GBCC' ? 'Mon' : 'Tue')) return club + ' ' + k + ' is a ' + s.weekday;
+          if (s.date !== E.isoDate(year, mo, want[k])) return club + ' ' + k + ': expected ' + E.isoDate(year, mo, want[k]) + ', got ' + s.date;
+          if (s.date.slice(0, 7) !== month) return club + ' ' + k + ' falls outside the month';
+        }
+        const w = E.parseDate(E.sessionDate(S, month, club, 'WB').date).day;
+        const i = E.parseDate(E.sessionDate(S, month, club, 'IB').date).day;
+        if (i - w !== 7) return club + ' Windows and iPad are not in successive weeks';
+      }
+      return true;
+    });
+  });
+
+  /* --- The alternative rule: both clubs in the same two weeks --------------- */
+  test('Same-week rule (setting)', 'November 2026: GBCC Mon 16 / 23, FCC Tue 17 / 24', () => {
+    const S2 = JSON.parse(JSON.stringify(S)); S2.weekRule = 'sameWeek';
+    return eq(['WB', 'IB'].flatMap(k => ['GBCC', 'FCC'].map(c => E.sessionDate(S2, '2026-11', c, k).date)),
+              ['2026-11-16', '2026-11-17', '2026-11-23', '2026-11-24']);
+  });
+  test('Same-week rule (setting)', 'January 2028: GBCC Mon 17 / 24, FCC Tue 18 / 25', () => {
+    const S2 = JSON.parse(JSON.stringify(S)); S2.weekRule = 'sameWeek';
+    return eq(['WB', 'IB'].flatMap(k => ['GBCC', 'FCC'].map(c => E.sessionDate(S2, '2028-01', c, k).date)),
+              ['2028-01-17', '2028-01-18', '2028-01-24', '2028-01-25']);
+  });
+  test('Same-week rule (setting)', 'Normal months give the same dates under both rules (Sep 2026 – Jul 2028)', () => {
+    const S2 = JSON.parse(JSON.stringify(S)); S2.weekRule = 'sameWeek';
+    const differ = E.monthsBetween('2026-09', '2028-07').filter(m => !E.isBreakMonth(S, m)).filter(m =>
+      groups.some(([c, k]) => E.sessionDate(S, m, c, k).date !== E.sessionDate(S2, m, c, k).date));
+    // Only months whose last Monday is the last day of the month should differ.
+    return eq(differ, ['2026-11', '2027-05', '2028-01']);
+  });
+
+  /* --- Times ------------------------------------------------------------------ */
+  test('Times', 'Beginners 12:30–14:00, Main 14:00–16:00 for both clubs', () => {
+    const want = { WB: ['12:30', '14:00'], WM: ['14:00', '16:00'], IB: ['12:30', '14:00'], IM: ['14:00', '16:00'] };
+    for (const [c, k] of groups) {
+      const s = E.sessionDate(S, '2027-01', c, k);
+      if (s.start !== want[k][0] || s.end !== want[k][1]) return c + ' ' + k + ' is ' + s.start + '–' + s.end;
+    }
+    return true;
+  });
+  test('Times', 'formatTime shows 12-hour times without a leading zero', () =>
+    eq([E.formatTime('12:30'), E.formatTime('14:00'), E.formatTime('09:15'), E.formatTime('00:00'), E.formatTime('bad')],
+       ['12:30', '2:00', '9:15', '12:00', '']));
+  test('Times', 'isTime accepts HH:MM only', () =>
+    eq([E.isTime('14:00'), E.isTime('23:59'), E.isTime('24:00'), E.isTime('9:00'), E.isTime('')], [true, true, false, false, false]));
+
+  /* --- Month arithmetic and formatting ----------------------------------------- */
+  test('Months', 'addMonths crosses year ends both ways', () =>
+    eq([E.addMonths('2026-12', 1), E.addMonths('2027-01', -1), E.addMonths('2026-09', 22), E.addMonths('2027-03', -15)],
+       ['2027-01', '2026-12', '2028-07', '2025-12']));
+  test('Months', 'monthsBetween Sep 2026 – Jul 2028 gives 23 months', () => eq(E.monthsBetween('2026-09', '2028-07').length, 23));
+  test('Months', 'monthsBetween with To before From is empty', () => eq(E.monthsBetween('2027-05', '2027-01'), []));
+  test('Months', 'formatDayDate and formatMonth', () =>
+    eq([E.formatDayDate('2027-01-19'), E.formatDayDate('2028-02-29', true), E.formatMonth('2027-01'), E.formatMonth('2027-01', true)],
+       ['Tue 19 Jan', 'Tue 29 Feb 2028', 'January 2027', 'Jan 2027']));
+  test('Months', 'parseDate rejects impossible dates', () =>
+    eq([!!E.parseDate('2027-02-29'), !!E.parseDate('2028-02-29'), !!E.parseDate('2027-13-01'), !!E.parseDate('19/01/2027')],
+       [false, true, false, false]));
+  test('Months', 'malformed months give no session rather than an error', () =>
+    eq([E.sessionDate(S, '2027-13', 'GBCC', 'WB'), E.sessionDate(S, 'Jan', 'GBCC', 'WB'), E.sessionDate(S, '2027-01', 'XYZ', 'WB')], [null, null, null]));
+
+  /* --- The pattern lives in settings: changing it needs no code ----------------- */
+  test('Changed pattern', 'Clubs on Wednesday and Thursday, Windows three weeks from the end (Oct 2026)', () => {
+    const S2 = JSON.parse(JSON.stringify(S));
+    S2.clubs[0].meetingDay = 'Wed'; S2.clubs[1].meetingDay = 'Thu';
+    S2.categories.find(c => c.code === 'WB').weekFromEnd = 3;
+    // Oct 2026: Wednesdays 7, 14, 21, 28; Thursdays 1, 8, 15, 22, 29. Third from the end: Wed 14, Thu 15.
+    return eq([E.sessionDate(S2, '2026-10', 'GBCC', 'WB').date, E.sessionDate(S2, '2026-10', 'FCC', 'WB').date,
+               E.sessionDate(S2, '2026-10', 'GBCC', 'IB').date, E.sessionDate(S2, '2026-10', 'FCC', 'IB').date],
+              ['2026-10-14', '2026-10-15', '2026-10-28', '2026-10-29']);
+  });
+  test('Changed pattern', 'Removing December from the breaks gives December sessions', () => {
+    const S2 = JSON.parse(JSON.stringify(S));
+    S2.breakMonths = [7, 8];
+    // Dec 2026: Mondays 7, 14, 21, 28 (Tue 29 in month) -> Windows 21/22, iPad 28/29.
+    return eq([E.sessionDate(S2, '2026-12', 'GBCC', 'WB').date, E.sessionDate(S2, '2026-12', 'FCC', 'IM').date],
+              ['2026-12-21', '2026-12-29']);
+  });
+  test('Changed pattern', 'A closure on a meeting date is reported', () => {
+    const S2 = JSON.parse(JSON.stringify(S));
+    S2.closures = [{ date: '2027-01-18', club: 'GBCC', note: 'Hall closed' }];
+    const g = E.sessionDate(S2, '2027-01', 'GBCC', 'WB'), f = E.sessionDate(S2, '2027-01', 'FCC', 'WB');
+    return eq([g.closure, f.closure], ['Hall closed', null]);
+  });
+
+  /* --- Time zones -------------------------------------------------------------- */
+  test('Time zones', 'Results do not depend on this device\'s time zone (offset ' + new Date().getTimezoneOffset() + ' min)', () =>
+    eq(E.sessionDate(S, '2027-03', 'FCC', 'IB').date, '2027-03-30'));
+  test('Time zones', 'todayParts uses the device\'s own calendar date', () =>
+    eq(E.todayParts(new Date(2027, 0, 31, 23, 59)), { month: '2027-01', date: '2027-01-31' }));
+}
+
+function report(results) {
+  const failed = results.filter(r => r.result !== true);
+  const sum = document.getElementById('summary');
+  sum.className = 'summary ' + (failed.length ? 'fail' : 'pass');
+  sum.textContent = failed.length
+    ? failed.length + ' of ' + results.length + ' tests FAILED'
+    : 'All ' + results.length + ' tests passed';
+  document.title = (failed.length ? 'FAIL ' : 'PASS ') + (results.length - failed.length) + '/' + results.length;
+  const out = document.getElementById('results');
+  const sections = [...new Set(results.map(r => r.section))];
+  sections.forEach(section => {
+    const h = document.createElement('h2'); h.textContent = section; out.append(h);
+    const table = document.createElement('table');
+    results.filter(r => r.section === section).forEach(r => {
+      const tr = document.createElement('tr');
+      const a = document.createElement('td'); a.textContent = r.name;
+      const b = document.createElement('td');
+      b.className = r.result === true ? 'ok' : 'bad';
+      b.textContent = r.result === true ? 'Pass' : 'FAIL: ' + r.result;
+      tr.append(a, b); table.append(tr);
+    });
+    out.append(table);
+  });
+  window.testResults = { total: results.length, failed: failed.map(f => f.section + ' / ' + f.name + ': ' + f.result) };
+}
+
+(async () => {
+  try {
+    const [E, S] = await Promise.all([loadEngine(), loadSettings()]);
+    defineTests(E, S);
+    const results = tests.map(([section, name, fn]) => {
+      let result;
+      try { result = fn(); } catch (err) { result = 'error: ' + err.message; }
+      return { section, name, result };
+    });
+    report(results);
+  } catch (err) {
+    document.getElementById('summary').className = 'summary fail';
+    document.getElementById('summary').textContent = 'Could not run the tests: ' + err.message;
+    document.title = 'FAIL setup';
+    window.testResults = { total: 0, failed: ['setup: ' + err.message] };
+  }
+})();
+</script>
+</body>
+</html>

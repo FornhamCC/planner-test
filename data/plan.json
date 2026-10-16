@@ -1,0 +1,168 @@
+{
+  "meta": {
+    "format": "gbcc-fcc-topic-board",
+    "version": 1,
+    "savedAt": "2026-10-15T14:32:27.176Z",
+    "savedBy": "bernieonline"
+  },
+  "settings": {
+    "boardTitle": "Topic Planning Board",
+    "clubs": [
+      {
+        "code": "GBCC",
+        "name": "Great Barton Computer Club",
+        "shortName": "Great Barton",
+        "meetingDay": "Mon"
+      },
+      {
+        "code": "FCC",
+        "name": "Fornham Computer Club",
+        "shortName": "Fornham",
+        "meetingDay": "Tue"
+      }
+    ],
+    "categories": [
+      {
+        "code": "WB",
+        "name": "Windows Beginners",
+        "platform": "Windows",
+        "start": "12:30",
+        "end": "14:00",
+        "weekFromEnd": 2,
+        "colours": {
+          "fill": "#E6F0FC",
+          "line": "#9CC2EE",
+          "strong": "#4A8AD6",
+          "ink": "#1B4C86"
+        }
+      },
+      {
+        "code": "WM",
+        "name": "Windows Main",
+        "platform": "Windows",
+        "start": "14:00",
+        "end": "16:00",
+        "weekFromEnd": 2,
+        "colours": {
+          "fill": "#D3DFF5",
+          "line": "#7E9BD6",
+          "strong": "#1F4E9E",
+          "ink": "#15336E"
+        }
+      },
+      {
+        "code": "IB",
+        "name": "iPad Beginners",
+        "platform": "iPad",
+        "start": "12:30",
+        "end": "14:00",
+        "weekFromEnd": 1,
+        "colours": {
+          "fill": "#E2F4EC",
+          "line": "#94D3B8",
+          "strong": "#2FA37E",
+          "ink": "#1A6347"
+        }
+      },
+      {
+        "code": "IM",
+        "name": "iPad Main",
+        "platform": "iPad",
+        "start": "14:00",
+        "end": "16:00",
+        "weekFromEnd": 1,
+        "colours": {
+          "fill": "#D0E7D3",
+          "line": "#7FB98A",
+          "strong": "#2E7D3A",
+          "ink": "#1E5527"
+        }
+      }
+    ],
+    "clubEvent": {
+      "code": "EV",
+      "name": "Club event",
+      "colours": {
+        "fill": "#F3EADC",
+        "line": "#CDB48C",
+        "strong": "#B8956A",
+        "ink": "#5C4220"
+      }
+    },
+    "weekRule": "eachClub",
+    "breakMonths": [
+      7,
+      8,
+      12
+    ],
+    "breakNames": {
+      "7": "Summer break",
+      "8": "Summer break",
+      "12": "Christmas break"
+    },
+    "closures": [],
+    "groupNames": {
+      "GBCC_WB": "GBCC Windows Beginners",
+      "GBCC_WM": "GBCC Windows Main Group",
+      "GBCC_IB": "GBCC iPad Beginners",
+      "GBCC_IM": "GBCC iPad Main Group",
+      "FCC_WB": "FCC Windows Beginners",
+      "FCC_WM": "FCC Windows Main Group",
+      "FCC_IB": "FCC iPad Beginners",
+      "FCC_IM": "FCC iPad Main Group"
+    },
+    "presenters": [
+      {
+        "code": "BG",
+        "name": "Bernard Grimshaw",
+        "active": true
+      },
+      {
+        "code": "RC",
+        "name": "Robert Church",
+        "active": true
+      }
+    ],
+    "firstMonth": "2027-01"
+  },
+  "topics": {
+    "t_agm2027": {
+      "title": "Club AGM",
+      "category": "EV",
+      "presenter": "",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "The Fornham Computer Club Annual General Meeting takes the place of this month's Windows sessions. Times to be confirmed.",
+      "updatedAt": "2026-10-15T13:00:00Z",
+      "updatedBy": "initial setup"
+    }
+  },
+  "sessions": {
+    "2027-01_FCC_WB": {
+      "topicId": "t_agm2027",
+      "club": "FCC",
+      "category": "WB",
+      "month": "2027-01",
+      "date": "2027-01-19",
+      "start": "14:00",
+      "end": "16:00",
+      "status": "planned",
+      "moved": true,
+      "updatedAt": "2026-10-15T14:23:12.103Z",
+      "updatedBy": "bernieonline"
+    },
+    "2027-01_FCC_WM": {
+      "topicId": "t_agm2027",
+      "club": "FCC",
+      "category": "WM",
+      "month": "2027-01",
+      "date": "2027-01-19",
+      "start": "15:00",
+      "end": "17:00",
+      "status": "planned",
+      "moved": true,
+      "updatedAt": "2026-10-15T14:32:25.168Z",
+      "updatedBy": "bernieonline"
+    }
+  }
+}

@@ -1,0 +1,3289 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!--
+  Content Security Policy (see "Security and robustness" in the software design).
+  - default-src 'none'      : nothing is allowed unless listed below.
+  - script-src 'self'       : scripts only from this site. 'unsafe-inline' is needed because
+                              the board's own script is written inside this file; it does NOT
+                              allow scripts from any other website.
+  - connect-src             : the page may only talk to its own site and GitHub's API, so even a
+                              faulty script could not send the access key anywhere else.
+  - font-src / img-src      : fonts from the fonts/ folder; images from this site or inline icons.
+  - base-uri / form-action  : stop injected markup redirecting links or forms elsewhere.
+-->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Topic Planning Board</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23B8956A'/%3E%3Cpath d='M6 8h12M6 12h12M6 16h7' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+
+<style>
+/* =====================================================================
+   1. STYLES
+   Colour and size tokens first, then layout, header bars, grid, tiles,
+   panels and dialogs. Category colours are NOT here: they come from the
+   data file's settings, so they can change without a code edit.
+   ===================================================================== */
+
+/* Atkinson Hyperlegible is kept in the repository's fonts/ folder rather than
+   loaded from Google, so the board never depends on another website.
+   font-display: swap shows text at once in a fallback font while the file loads. */
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  src: url("fonts/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  src: url("fonts/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2");
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+
+:root {
+  /* Ground and surfaces */
+  --bg: #F6F3EE;
+  --surface: #FFFFFF;
+  --surface-2: #FAF8F5;
+  --line: #E2DCD2;
+  --line-strong: #D6CFC4;
+  /* Text */
+  --ink: #1C1B19;
+  --ink-2: #3A3732;
+  --muted: #5E5A54;
+  --muted-2: #6B655C;
+  /* Bronze accent */
+  --bronze: #B8956A;
+  --bronze-ink: #7A5A2E;
+  --bronze-deep: #5C4220;
+  --bronze-soft: #FBF4E8;
+  --bronze-chip: #F3EADC;
+  /* States */
+  --ok: #2E6B3A;
+  --ok-soft: #E4F2E6;
+  --warn: #8A5A00;
+  --warn-soft: #FFF4DB;
+  --danger: #A12C22;
+  --danger-soft: #FBE9E7;
+  /* Sizes */
+  --radius: 10px;
+  --touch: 44px;          /* minimum touch target on iPad */
+  --month-col: 8.5rem;    /* width of the sticky month column */
+  --group-col: 8.5rem;    /* minimum width of each group column: 8 of them fit a 1,440 px screen,
+                             or a 1,600 px screen with the tray docked beside the board */
+  --band-h: 3.25rem;      /* height of the category band header row */
+  --sub-h: 2.4rem;        /* height of the club sub-header row */
+}
+
+* { box-sizing: border-box; }
+/* Make the hidden attribute win over any display rule below (e.g. .btn, .switch). */
+[hidden] { display: none !important; }
+.nowrap { white-space: nowrap; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--bronze-ink); }
+a:hover { color: var(--bronze-deep); }
+:focus-visible { outline: 3px solid var(--bronze); outline-offset: 2px; }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+.icon { display: inline-flex; width: 18px; height: 18px; flex-shrink: 0; }
+.icon svg { width: 100%; height: 100%; }
+
+/* --- Page frame: header bars stay put, the board area scrolls ---------- */
+.app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+/* --- Buttons ------------------------------------------------------------ */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--touch); padding: 0 16px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink);
+  font-size: 15px; white-space: nowrap;
+}
+.btn:hover { background: var(--surface-2); }
+.btn[disabled] { opacity: .5; cursor: default; }
+.btn-dark { background: var(--ink); color: #FFFFFF; border-color: var(--ink); font-weight: 700; }
+.btn-dark:hover { background: #33312D; }
+.btn-bronze { background: var(--bronze); border-color: var(--bronze); color: var(--ink); font-weight: 700; }
+.btn-bronze:hover { background: #C6A67D; }
+.btn-outline-bronze { border-color: var(--bronze); }
+.btn-quiet { border-color: transparent; background: transparent; }
+.btn-quiet:hover { background: var(--bronze-chip); }
+.btn-danger-text { border-color: transparent; background: transparent; color: var(--danger); font-weight: 700; }
+.btn-icon { width: var(--touch); padding: 0; }
+
+/* --- Header bar 1: identity, views, save status, edit switch ------------ */
+.bar1 {
+  background: var(--surface);
+  border-bottom: 3px solid var(--bronze);
+  padding: 8px 20px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark {
+  width: 44px; height: 44px; border-radius: 10px; background: var(--bronze);
+  display: flex; align-items: center; justify-content: center; color: #FFFFFF;
+}
+.brand-mark .icon { width: 24px; height: 24px; }
+.brand-title { font-size: 20px; font-weight: 700; line-height: 1.2; }
+.brand-sub { font-size: 14px; color: var(--muted); }
+.views { display: flex; gap: 2px; }
+.views button {
+  border: 0; background: transparent; min-height: var(--touch);
+  padding: 0 14px; font-size: 16px; color: var(--muted);
+  border-bottom: 3px solid transparent;
+}
+.views button[aria-current="page"] { color: var(--ink); font-weight: 700; border-bottom-color: var(--ink); }
+.bar1-right { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.save-status { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.save-status[data-tone="ok"] { color: var(--ok); }
+.save-status[data-tone="busy"] { color: var(--bronze-ink); }
+.save-status[data-tone="warn"] { color: var(--warn); }
+.save-status[data-tone="bad"] { color: var(--danger); }
+.role-chip {
+  font-size: 13px; font-weight: 700; color: var(--bronze-ink);
+  background: var(--bronze-chip); border: 1px solid #D9C3A0;
+  border-radius: 999px; padding: 4px 12px;
+}
+
+/* The Edit switch: a real button with role="switch" so screen readers announce on/off. */
+.switch {
+  display: inline-flex; align-items: center; gap: 10px;
+  min-height: var(--touch); padding: 0 6px 0 14px;
+  border: 1px solid var(--line-strong); border-radius: 999px;
+  background: var(--surface); font-size: 15px; font-weight: 700;
+}
+.switch-track {
+  width: 46px; height: 28px; border-radius: 999px; background: #CFC8BD;
+  position: relative; transition: background .15s;
+}
+.switch-track::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
+  border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.25);
+  transition: transform .15s;
+}
+.switch[aria-checked="true"] { border-color: var(--bronze); background: var(--bronze-soft); }
+.switch[aria-checked="true"] .switch-track { background: var(--bronze); }
+.switch[aria-checked="true"] .switch-track::after { transform: translateX(18px); }
+
+/* --- Header bar 2: what you are looking at ------------------------------- */
+.bar2 {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  padding: 8px 20px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+}
+.segmented { display: flex; background: #EFEAE2; border-radius: var(--radius); padding: 4px; }
+.segmented button {
+  border: 0; background: transparent; min-height: 38px; padding: 0 16px;
+  border-radius: 8px; font-size: 15px; color: #4A4640;
+}
+.segmented button[aria-pressed="true"] {
+  background: var(--surface); color: var(--ink); font-weight: 700;
+  box-shadow: 0 1px 2px rgba(0,0,0,.12);
+}
+.range { display: flex; align-items: center; gap: 4px; }
+.range-label {
+  border: 0; background: transparent; min-height: var(--touch);
+  font-size: 16px; font-weight: 700; padding: 0 10px; border-radius: 8px;
+}
+.range-label:hover { background: var(--surface-2); }
+.field-inline { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--ink-2); }
+select.input, input.input, textarea.input {
+  min-height: var(--touch); padding: 0 10px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+  background: var(--surface); font-size: 16px; /* 16px stops iPad Safari zooming in on focus */
+}
+textarea.input { padding: 10px; line-height: 1.5; resize: vertical; min-height: 120px; }
+.input:disabled { background: var(--surface-2); color: var(--muted); }
+.input[aria-invalid="true"] { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+
+/* --- Main area ----------------------------------------------------------- */
+main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 20px 20px; gap: 12px; }
+.messages { display: flex; flex-direction: column; gap: 8px; }
+.message {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--surface); font-size: 15px;
+}
+.message[data-tone="warn"] { background: var(--warn-soft); border-color: #E8C77A; }
+.message[data-tone="bad"]  { background: var(--danger-soft); border-color: #E3A39C; }
+.message[data-tone="info"] { background: var(--bronze-soft); border-color: var(--bronze); }
+.message-text { flex: 1; padding-top: 2px; }
+.message .btn { min-height: 36px; }
+
+/* --- The planning grid -----------------------------------------------------
+   One CSS grid holds every cell. Rows are wrapped in display:contents elements,
+   so they group cells for styling without affecting the grid layout.
+   position: sticky keeps the header rows and the month column in view while
+   the board scrolls inside .grid-scroll.                                        */
+.grid-scroll {
+  flex: 1; min-height: 0; overflow: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  -webkit-overflow-scrolling: touch;
+}
+.board { display: grid; position: relative; }
+.row { display: contents; }
+
+.hcell { position: sticky; z-index: 3; }
+.corner {
+  position: sticky; left: 0; top: 0; z-index: 5;
+  grid-row: span 2; background: var(--ink); color: #D9C3A0;
+  font-size: 13px; font-weight: 700; letter-spacing: .05em;
+  padding: 12px; display: flex; align-items: flex-end;
+}
+.band {
+  top: 0; height: var(--band-h); padding: 8px 12px;
+  display: flex; align-items: center; font-size: 17px; font-weight: 700;
+  border-top: 6px solid var(--strong, var(--ink));
+  background: var(--fill, var(--surface-2)); color: var(--ink-c, var(--ink));
+  border-left: 2px solid #FFFFFF;
+}
+.band.dark { background: #2A2825; color: #FFFFFF; border-top-color: var(--bronze); }
+.sub {
+  top: var(--band-h); height: var(--sub-h); padding: 0 12px;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 14px; color: var(--ink-2); background: var(--surface-2);
+  border-bottom: 1px solid var(--line); border-left: 1px dashed #DDD6CB;
+}
+.sub.first { border-left: 2px solid var(--line); }
+.sub .swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--strong); }
+
+.mcell {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--surface); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 2px;
+}
+.mcell .m { font-size: 18px; font-weight: 700; }
+.mcell .y { font-size: 14px; color: var(--muted); }
+.now-chip {
+  align-self: flex-start; margin-top: 4px; font-size: 12px; font-weight: 700;
+  background: var(--bronze); color: var(--ink); border-radius: 6px; padding: 2px 8px; white-space: nowrap;
+}
+.cell {
+  border-bottom: 1px solid var(--line); border-left: 1px dashed #DDD6CB;
+  padding: 8px; min-height: 120px; display: flex; flex-direction: column; gap: 6px;
+}
+.cell.first { border-left: 2px solid var(--line); }
+.cell.editable-empty { cursor: pointer; }
+.cell .hint { font-size: 13px; color: var(--muted-2); }
+.cell .hint.closed { color: var(--danger); font-weight: 700; }
+.row.is-current > .cell, .row.is-current > .mcell { background: var(--bronze-soft); }
+.row.is-current > .mcell { box-shadow: inset 3px 0 0 var(--bronze); }
+.row.is-past .tile { opacity: .62; }
+
+.break-band {
+  grid-column: 2 / -1; border-bottom: 1px solid var(--line);
+  background: repeating-linear-gradient(135deg, #F3F0EB 0 10px, #EAE5DD 10px 20px);
+  padding: 12px 16px; font-size: 16px; font-weight: 700; color: #4A4640;
+  display: flex; align-items: center;
+}
+.row.is-break > .mcell { background: #F3F0EB; color: #4A4640; }
+
+/* --- Tiles -------------------------------------------------------------- */
+.tile {
+  flex: 1; text-align: left; width: 100%;
+  background: var(--fill); border: 1px solid var(--line-c); border-radius: 10px;
+  padding: 8px 9px; min-height: 96px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.tile:hover { box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+.tile .when-line { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.tile .when { font-size: 13px; font-weight: 700; color: var(--ink-c); }
+.tile .when.moved { color: var(--bronze-deep); }
+.pres {
+  flex-shrink: 0; font-size: 12px; font-weight: 700; letter-spacing: .04em;
+  background: var(--ink); color: #FFFFFF; border-radius: 6px; padding: 2px 7px;
+}
+.tile .title { font-size: 15px; font-weight: 700; line-height: 1.25; color: var(--ink); }
+.tile .flags { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 18px; color: var(--ink-2); }
+.chip {
+  font-size: 12px; font-weight: 700; border-radius: 6px; padding: 1px 6px;
+  border: 1px solid transparent;
+}
+.chip-moved { color: var(--bronze-deep); background: var(--bronze-chip); border-color: #CDB48C; }
+.chip-cancelled { color: #FFFFFF; background: var(--danger); }
+.chip-event { color: var(--bronze-deep); background: #FFFFFF; border-color: #CDB48C; }
+.tile.cancelled .title { text-decoration: line-through; color: var(--muted); }
+
+/* --- Settings and PDF pages --------------------------------------------- */
+.page { flex: 1; min-height: 0; overflow: auto; }
+.page-inner { max-width: 880px; display: flex; flex-direction: column; gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+.card h2 { margin: 0 0 4px; font-size: 20px; }
+.card h3 { margin: 16px 0 6px; font-size: 16px; }
+.card p { margin: 6px 0; }
+.card .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.kv { display: grid; grid-template-columns: minmax(10rem, max-content) 1fr; gap: 6px 16px; font-size: 15px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+.note { font-size: 14px; color: var(--muted); }
+table.simple { border-collapse: collapse; width: 100%; font-size: 15px; }
+table.simple th, table.simple td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+table.simple th { color: var(--muted); font-weight: 400; }
+
+/* --- Dialogs (<dialog> element: Escape closes it, focus is trapped inside) */
+dialog {
+  border: 1px solid var(--line); border-radius: 16px; padding: 0;
+  background: var(--surface); color: var(--ink);
+  width: min(520px, calc(100vw - 24px));
+  box-shadow: 0 20px 50px rgba(0,0,0,.25);
+}
+dialog::backdrop { background: rgba(28,27,25,.45); }
+.dlg-head { padding: 18px 20px 6px; display: flex; align-items: flex-start; gap: 12px; }
+.dlg-head h2 { margin: 0; font-size: 20px; flex: 1; }
+.dlg-body { padding: 6px 20px 16px; display: flex; flex-direction: column; gap: 14px; }
+.dlg-foot { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dlg-foot .right { margin-left: auto; display: flex; gap: 8px; }
+.field { display: flex; flex-direction: column; gap: 5px; font-size: 14px; font-weight: 700; color: var(--ink-2); }
+.field .help { font-weight: 400; color: var(--muted); font-size: 13px; }
+.field .error { font-weight: 700; color: var(--danger); font-size: 13px; }
+.row-fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+
+/* The details panel is a side sheet on a PC and full screen on an iPad in portrait. */
+dialog.sheet {
+  margin: 0 0 0 auto; height: 100vh; height: 100dvh; max-height: none;
+  width: min(600px, 100vw); border-radius: 16px 0 0 16px;
+  display: none; flex-direction: column;
+}
+dialog.sheet[open] { display: flex; }
+.sheet-head {
+  padding: 16px 20px 14px; background: var(--fill);
+  border-top: 6px solid var(--strong);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.sheet-head .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cat-chip {
+  font-size: 13px; font-weight: 700; color: var(--ink-c);
+  background: #FFFFFF; border: 1px solid var(--line-c); border-radius: 6px; padding: 2px 8px;
+}
+.sheet-title { margin: 0; font-size: 22px; line-height: 1.25; }
+.sheet-body { flex: 1; overflow: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 20px; }
+.sheet-section { display: flex; flex-direction: column; gap: 10px; }
+.sheet-section h3 { margin: 0; font-size: 17px; }
+.session-box { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--surface-2); display: flex; flex-direction: column; gap: 10px; }
+.session-box .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.status-chip { font-size: 13px; font-weight: 700; border-radius: 6px; padding: 3px 8px; color: var(--ok); background: var(--ok-soft); }
+.status-chip.cancelled { color: #FFFFFF; background: var(--danger); }
+.linkrow { display: flex; gap: 8px; }
+.linkrow .input { flex: 1; min-width: 0; }
+.briefing { border: 1px solid var(--line); border-radius: 12px; }
+.briefing > summary {
+  list-style: none; cursor: pointer; min-height: 52px; padding: 0 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 17px; font-weight: 700; background: var(--surface-2); border-radius: 12px;
+}
+.briefing > summary::-webkit-details-marker { display: none; }
+.briefing[open] > summary { border-bottom: 1px solid var(--line); border-radius: 12px 12px 0 0; }
+.briefing .inner { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.briefing .read { white-space: pre-wrap; margin: 0; font-size: 16px; line-height: 1.5; }
+.also { font-size: 14px; color: var(--muted); }
+.also button { border: 0; background: none; padding: 0; color: var(--bronze-ink); text-decoration: underline; font-size: 14px; }
+
+/* --- Toast: short confirmations, announced politely to screen readers ---- */
+.toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(20px);
+  background: var(--ink); color: #FFFFFF; padding: 12px 18px; border-radius: 12px;
+  font-size: 15px; box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: calc(100vw - 32px);
+  z-index: 100;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.loading { padding: 40px; text-align: center; color: var(--muted); font-size: 17px; }
+
+/* --- Workspace: the grid plus the topic tray (Stage 2) ----------------------
+   The tray sits beside the grid on wide screens (docked) and slides over the
+   right-hand side of the grid on narrower ones, so the grid keeps the full
+   width of an iPad. .workspace is position: relative so the sliding tray can
+   be placed against its right edge.                                          */
+.workspace { flex: 1; min-height: 0; display: flex; gap: 12px; position: relative; }
+.workspace > .grid-scroll { flex: 1; min-width: 0; }
+.tray {
+  width: 300px; flex-shrink: 0; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; min-height: 0;
+}
+.tray.overlay {
+  position: absolute; top: 0; right: 0; bottom: 0; z-index: 20; width: min(340px, 92%);
+  box-shadow: -12px 0 32px rgba(0,0,0,.18);
+}
+.tray-head { padding: 12px 14px 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.tray-head .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tray-head h2 { margin: 0; font-size: 18px; }
+.tray-head .segmented button { padding: 0 10px; font-size: 14px; min-height: 34px; }
+.tray-list { flex: 1; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; -webkit-overflow-scrolling: touch; }
+.tray-foot { padding: 10px; border-top: 1px solid var(--line); }
+.tray-foot .btn { width: 100%; }
+.tray-empty { color: var(--muted); font-size: 14px; padding: 8px 4px; }
+.tray-card {
+  text-align: left; width: 100%; background: var(--fill); border: 1px solid var(--line-c);
+  border-left: 6px solid var(--strong); border-radius: 10px; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.tray-card .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.tray-card .title { font-size: 15px; font-weight: 700; line-height: 1.25; }
+.tray-card .cat { font-size: 12px; font-weight: 700; color: var(--ink-c); }
+.tray-card .badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.badge { font-size: 12px; font-weight: 700; border-radius: 6px; padding: 2px 7px; background: #FFFFFF; color: var(--muted); border: 1px dashed var(--line-strong); }
+.badge.placed { color: var(--ok); background: var(--ok-soft); border: 1px solid #A9D3B0; }
+
+/* --- The placing strip: what the selected tile or topic will do ----------- */
+.strip {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding: 8px 10px 8px 14px; border-radius: 12px;
+  background: var(--bronze-soft); border: 1px solid var(--bronze);
+}
+.strip .text { flex: 1 1 260px; font-size: 15px; }
+.strip .text strong { font-weight: 700; }
+.strip .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.strip .btn { min-height: 40px; padding: 0 12px; }
+
+/* --- Editing the grid --------------------------------------------------------
+   In Edit mode each empty cell holds a button covering the cell, so a tap or
+   a keyboard press can place a topic there. Lit cells are the valid places for
+   whatever is selected or being dragged.                                       */
+.cell-btn {
+  flex: 1; width: 100%; text-align: left; display: flex; align-items: flex-start;
+  border: 1px dashed transparent; border-radius: 10px; background: transparent; padding: 4px;
+  font-size: 13px; color: var(--muted-2);
+}
+.board.is-editing .cell-btn:hover { border-color: var(--line-strong); background: var(--surface-2); }
+.cell.lit { background: #FFF8EC; box-shadow: inset 0 0 0 2px var(--bronze); }
+.cell.lit .cell-btn { color: var(--bronze-deep); font-weight: 700; }
+.cell.lit.occupied { box-shadow: inset 0 0 0 2px #CDB48C; }
+.cell.is-cursor { box-shadow: inset 0 0 0 3px var(--ink); }
+.cell.drop-hover { background: var(--bronze-chip); box-shadow: inset 0 0 0 3px var(--bronze-deep); }
+.cell.drop-refused { box-shadow: inset 0 0 0 3px var(--danger); }
+.board.is-editing .tile, .tray.can-drag .tray-card {
+  /* Stop iPad Safari's long-press callout and text selection, which would
+     otherwise fight the press-and-hold that starts a drag. */
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; cursor: grab;
+}
+.tray.drop-hover { box-shadow: inset 0 0 0 3px var(--bronze-deep); background: var(--bronze-soft); }
+.tile.is-selected, .tray-card.is-selected { outline: 3px solid var(--ink); outline-offset: 2px; }
+.tile.is-drag-source, .tray-card.is-drag-source { opacity: .35; }
+.drag-ghost {
+  position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none;
+  width: 190px; transform-origin: 0 0; box-shadow: 0 12px 28px rgba(0,0,0,.28);
+  border-radius: 10px; opacity: .95;
+}
+.drag-ghost .tile, .drag-ghost.tray-card { min-height: 0; }
+body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
+.chip-invites { color: var(--ok); background: var(--ok-soft); border-color: #A9D3B0; display: inline-flex; align-items: center; gap: 3px; }
+.chip-invites .icon { width: 13px; height: 13px; }
+.test-banner { background: #5C4220; color: #FFFFFF; font-weight: 700; font-size: 14px; text-align: center; padding: 4px 12px; }
+.check-row { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; min-height: var(--touch); cursor: pointer; }
+.check-row input { width: 22px; height: 22px; accent-color: var(--ok); }
+.danger-zone { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+
+/* --- Fit the board to the iPad's width (Nice to Have 1) ----------------------
+   iPad landscape is about 1,180 px wide. Up to 1,300 px the month column and the
+   group columns narrow (each group column may shrink to 7rem = 112 px), so all
+   eight groups fit without scrolling sideways. Tiles get a little tighter.
+   Below 1,000 px (iPad portrait) eight columns cannot fit, so sideways scrolling
+   remains, or the Windows / iPad filter shows four columns that do fit.        */
+@media (max-width: 1300px) {
+  :root { --month-col: 5.6rem; --group-col: 7rem; }
+  .bar1, .bar2 { padding-left: 12px; padding-right: 12px; }
+  main { padding: 10px 10px 12px; }
+  .mcell { padding: 8px 8px; }
+  .mcell .m { font-size: 16px; }
+  .now-chip { font-size: 11px; padding: 1px 5px; }
+  .cell { padding: 5px; min-height: 104px; }
+  .tile { padding: 6px 7px; min-height: 88px; gap: 4px; }
+  .tile .when { font-size: 12px; }
+  .tile .title { font-size: 14px; }
+  .pres { font-size: 11px; padding: 1px 5px; }
+  .band { font-size: 15px; padding: 6px 8px; }
+  .sub { padding: 0 8px; }
+  .field-inline .label-text { display: none; }
+}
+
+/* --- Narrower screens (iPad portrait and below) ---------------------------- */
+@media (max-width: 900px) {
+  .brand-sub { display: none; }
+  :root { --month-col: 5rem; --group-col: 8rem; }
+}
+@media (max-width: 700px) {
+  dialog.sheet { width: 100vw; border-radius: 0; }
+  .row-fields { grid-template-columns: 1fr 1fr; }
+  .row-fields .field:first-child { grid-column: 1 / -1; }
+}
+</style>
+</head>
+
+<body>
+<!-- =====================================================================
+     2. PAGE MARKUP
+     Static containers only. Everything inside them is built by the
+     Rendering section, always with textContent so that text from the
+     data file can never be run as code.
+     ===================================================================== -->
+<div class="app">
+  <div class="test-banner" id="testBanner" hidden>TEST COPY — changes here do not affect the real plan</div>
+
+  <!-- Header bar 1: identity, views, save status, editing -->
+  <header class="bar1">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"><span class="icon" data-icon="calendar"></span></div>
+      <div>
+        <div class="brand-title" id="boardTitle">Topic Planning Board</div>
+        <div class="brand-sub" id="boardSub">Great Barton &amp; Fornham Computer Clubs</div>
+      </div>
+    </div>
+    <nav class="views" aria-label="Views">
+      <button type="button" data-view="board" aria-current="page">Board</button>
+      <button type="button" data-view="pdfs">PDFs</button>
+      <button type="button" data-view="settings">Settings</button>
+    </nav>
+    <div class="bar1-right">
+      <div class="save-status" id="saveStatus" role="status" aria-live="polite"></div>
+      <button type="button" class="btn btn-quiet btn-icon" id="refreshBtn" title="Refresh" aria-label="Refresh the board"><span class="icon" data-icon="refresh"></span></button>
+      <span class="role-chip" id="roleChip" hidden></span>
+      <button type="button" class="btn btn-outline-bronze" id="unlockBtn" hidden><span class="icon" data-icon="lock"></span>Unlock editing</button>
+      <button type="button" class="switch" id="editSwitch" role="switch" aria-checked="false" hidden>Edit<span class="switch-track" aria-hidden="true"></span></button>
+    </div>
+  </header>
+
+  <!-- Header bar 2: filter, date range, column grouping (Board view only) -->
+  <div class="bar2" id="bar2">
+    <div class="segmented" role="group" aria-label="Topics shown" id="platformFilter">
+      <button type="button" data-platform="all" aria-pressed="true">All</button>
+      <button type="button" data-platform="Windows" aria-pressed="false">Windows</button>
+      <button type="button" data-platform="iPad" aria-pressed="false">iPad</button>
+    </div>
+    <div class="range">
+      <button type="button" class="btn btn-icon" id="rangeEarlier" aria-label="Earlier months"><span class="icon" data-icon="left"></span></button>
+      <button type="button" class="range-label" id="rangeLabel" aria-label="Choose the months shown"></button>
+      <button type="button" class="btn btn-icon" id="rangeLater" aria-label="Later months"><span class="icon" data-icon="right"></span></button>
+      <button type="button" class="btn" id="thisMonthBtn" style="margin-left:6px">This month</button>
+    </div>
+    <label class="field-inline"><span class="label-text">Columns</span>
+      <select class="input" id="groupBySelect" aria-label="Columns">
+        <option value="category">By category</option>
+        <option value="club">By club</option>
+      </select>
+    </label>
+    <!-- Editing tools: shown only while the Edit switch is on -->
+    <div class="edit-tools" id="editTools" hidden style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn" id="undoBtn" disabled><span class="icon" data-icon="undo"></span>Undo</button>
+      <button type="button" class="btn" id="trayBtn" aria-expanded="false" aria-controls="tray"><span class="icon" data-icon="tray"></span>Topics</button>
+      <button type="button" class="btn btn-dark" id="newTopicBtn"><span class="icon" data-icon="plus"></span>New topic</button>
+    </div>
+  </div>
+
+  <main>
+    <div class="messages" id="messages" aria-live="polite"></div>
+    <!-- The placing strip: says what the selected tile or topic will do next -->
+    <div class="strip" id="strip" role="region" aria-label="Selected item" aria-live="polite" hidden></div>
+
+    <!-- Board view: the grid plus the topic tray -->
+    <div class="workspace" id="boardView">
+      <div class="grid-scroll" id="gridScroll">
+        <div class="loading" id="loading">Loading the plan…</div>
+        <div class="board" id="board" role="table" aria-label="Topic plan by month and group"></div>
+      </div>
+      <aside class="tray" id="tray" aria-label="Topic tray" hidden></aside>
+    </div>
+
+    <!-- PDFs view (built in Stage 4) -->
+    <div class="page" id="pdfsView" hidden>
+      <div class="page-inner">
+        <section class="card">
+          <h2>PDFs</h2>
+          <p>Making PDFs for a group, a club or the whole plan arrives in a later stage of the build.</p>
+        </section>
+      </div>
+    </div>
+
+    <!-- Settings view (editing access now; the rest in Stage 3) -->
+    <div class="page" id="settingsView" hidden>
+      <div class="page-inner" id="settingsInner"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Unlock editing dialog -->
+<dialog id="unlockDialog" aria-labelledby="unlockTitle">
+  <form method="dialog" id="unlockForm">
+    <div class="dlg-head">
+      <h2 id="unlockTitle">Unlock editing</h2>
+      <button type="submit" value="cancel" class="btn btn-quiet btn-icon" aria-label="Close" formnovalidate><span class="icon" data-icon="close"></span></button>
+    </div>
+    <div class="dlg-body">
+      <div class="message" data-tone="warn" id="unlockLapsed" hidden>
+        <div class="message-text">The editing key on this device has expired or was removed on GitHub. Paste a new key to carry on editing. Any changes not yet saved are kept and will save once the new key is in.</div>
+      </div>
+      <p style="margin:0">Paste your GitHub access key. This device will remember it, so you only do this once per device. The key is sent only to GitHub.</p>
+      <label class="field">Access key
+        <input class="input" type="password" id="keyInput" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_…">
+        <span class="help">A fine-grained key for the planner repository with “Contents: read and write”. The setup guide explains how to make one.</span>
+        <span class="error" id="keyError" role="alert"></span>
+      </label>
+    </div>
+    <div class="dlg-foot">
+      <a id="guideLink" target="_blank" rel="noopener noreferrer">How to make a key</a>
+      <div class="right">
+        <button type="submit" value="cancel" class="btn" formnovalidate>Cancel</button>
+        <button type="button" class="btn btn-dark" id="unlockConfirm">Unlock</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<!-- Month range dialog -->
+<dialog id="rangeDialog" aria-labelledby="rangeTitle">
+  <form method="dialog">
+    <div class="dlg-head"><h2 id="rangeTitle">Months shown</h2></div>
+    <div class="dlg-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <label class="field">From<select class="input" id="rangeFrom"></select></label>
+        <label class="field">To<select class="input" id="rangeTo"></select></label>
+      </div>
+      <span class="error" id="rangeError" style="color:var(--danger);font-weight:700;font-size:14px"></span>
+    </div>
+    <div class="dlg-foot"><div class="right">
+      <button type="submit" value="cancel" class="btn">Cancel</button>
+      <button type="button" class="btn btn-dark" id="rangeApply">Show these months</button>
+    </div></div>
+  </form>
+</dialog>
+
+<!-- New topic dialog -->
+<dialog id="topicDialog" aria-labelledby="topicDialogTitle">
+  <form method="dialog">
+    <div class="dlg-head">
+      <h2 id="topicDialogTitle">New topic</h2>
+      <button type="submit" value="cancel" class="btn btn-quiet btn-icon" aria-label="Close" formnovalidate><span class="icon" data-icon="close"></span></button>
+    </div>
+    <div class="dlg-body">
+      <label class="field">Title
+        <input class="input" id="ntTitle" maxlength="120" autocomplete="off">
+        <span class="error" id="ntTitleError"></span>
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <label class="field">Category<select class="input" id="ntCategory"></select></label>
+        <label class="field">Presenter<select class="input" id="ntPresenter"></select></label>
+      </div>
+      <label class="check-row" id="ntPlaceRow" hidden><input type="checkbox" id="ntPlace" checked><span id="ntPlaceText"></span></label>
+      <p class="note" style="margin:0">Notes links, slides and the members’ briefing can be added afterwards in the topic’s details.</p>
+    </div>
+    <div class="dlg-foot"><div class="right">
+      <button type="submit" value="cancel" class="btn" formnovalidate>Cancel</button>
+      <button type="button" class="btn btn-dark" id="ntCreate">Create topic</button>
+    </div></div>
+  </form>
+</dialog>
+
+<!-- A question with a choice of buttons (swap, replace, delete …), built by ask() -->
+<dialog id="askDialog" aria-labelledby="askTitle">
+  <div class="dlg-head"><h2 id="askTitle"></h2></div>
+  <div class="dlg-body"><p id="askText" style="margin:0"></p></div>
+  <div class="dlg-foot"><div class="right" id="askButtons"></div></div>
+</dialog>
+
+<!-- Topic details panel (contents built by renderDetails) -->
+<dialog class="sheet" id="detailsSheet" aria-labelledby="detailsTitle"></dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   3. CONSTANTS AND DEFAULTS
+   ===================================================================== */
+
+/* Where the plan lives on GitHub. Readers never use these: they load the
+   published copy (data/plan.json) from this site. Editors save through
+   GitHub's API to this repository. */
+const REPO = {
+  owner: 'FornhamCC',
+  name: repoNameFromAddress(),
+  branch: 'main',
+  dataPath: 'data/plan.json'
+};
+/* The live board is the 'planner' repository. A test copy can live in a second
+   repository whose name starts 'planner-' (for example 'planner-test'): the same
+   index.html then saves to that copy, because GitHub Pages serves each
+   repository under its own name: fornhamcc.github.io/planner-test/.
+   Anything else (such as testing on this computer) uses 'planner'. */
+function repoNameFromAddress() {
+  const first = location.pathname.split('/')[1] || '';
+  return /^planner(-[a-z0-9-]+)?$/i.test(first) ? first : 'planner';
+}
+const IS_TEST_COPY = REPO.name.toLowerCase() !== 'planner';
+const GITHUB_API = 'https://api.github.com';
+const GUIDE_URL = 'https://github.com/FornhamCC/planner/blob/main/docs/setup-guide.md';
+/* GitHub's page listing your fine-grained keys; "Regenerate token" is there. */
+const KEY_SETTINGS_URL = 'https://github.com/settings/personal-access-tokens';
+
+const DATA_FORMAT = 'gbcc-fcc-topic-board';
+const DATA_VERSION = 1;
+
+/* Names used in this browser's local storage. Only conveniences live there,
+   plus the editing key on devices where the editor chose to unlock. */
+const STORE = {
+  key: 'tpb.accessKey',
+  prefs: 'tpb.prefs'
+};
+
+/* Timings, in milliseconds */
+const SAVE_DELAY = 2000;             // wait after the last change so a burst of edits saves once
+const EDITOR_POLL = 60 * 1000;       // unlocked boards check GitHub for other people's saves
+const READER_POLL = 5 * 60 * 1000;   // read-only boards reload the published copy
+const RETRY_DELAYS = [5000, 15000, 30000, 60000]; // after a failed save (then every 60 s)
+
+/* Limits on stored text (see "Security and robustness") */
+const LIMITS = { title: 120, briefing: 5000, url: 2000 };
+
+/* The earliest month the board offers, and how far ahead it looks. */
+const EARLIEST_MONTH = '2026-09';
+const MONTHS_AHEAD = 24;
+
+/* Category codes are fixed; their names, colours and times are settings. */
+const CATEGORY_ORDER = ['WB', 'WM', 'IB', 'IM'];
+const CLUB_EVENT = 'EV';
+
+/* Small inline icons. These are constant strings written here, never data,
+   so inserting them as markup is safe. stroke="currentColor" lets each icon
+   take the colour of the text around it. */
+const ICONS = {
+  calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M8 13h3M13 13h3M8 17h3"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  left: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>',
+  right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>',
+  close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  cloudOk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.8A6 6 0 0 0 4.5 12.5 3.5 3.5 0 0 0 6 19z"/><path d="M9 14l2 2 4-4"/></svg>',
+  cloudBusy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.8A6 6 0 0 0 4.5 12.5 3.5 3.5 0 0 0 6 19z"/><path d="M12 11v5M9.5 13.5L12 11l2.5 2.5"/></svg>',
+  cloudWarn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.8A6 6 0 0 0 4.5 12.5 3.5 3.5 0 0 0 6 19z"/><path d="M12 11v3M12 16.5v.01"/></svg>',
+  eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  clip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"/></svg>',
+  doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
+  open: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
+  chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>',
+  undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  tray: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16M7 9h4M7 13h4"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+  paste: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 11h6M9 15h4"/></svg>',
+  remove: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h11M10 8l4 4-4 4M19 4v16"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>'
+};
+
+/* Dragging (section 8). On a mouse a drag starts once the pointer has moved a
+   few pixels; on a finger or pencil it starts after a press-and-hold, so an
+   ordinary swipe still scrolls the board. */
+const DRAG = {
+  mouseThreshold: 6,     // px moved with the button down before a mouse drag starts
+  holdDelay: 300,        // ms a finger must rest on a tile before it lifts
+  holdSlop: 10,          // px a finger may wander during the hold; more means "scroll"
+  edgeZone: 60,          // px from the board's edge where dragging scrolls the board
+  edgeSpeed: 18          // px scrolled per animation frame at the very edge
+};
+/* Width at which the topic tray sits beside the board instead of sliding over it. */
+const TRAY_DOCK_WIDTH = 1600;
+const UNDO_LIMIT = 50;
+
+/* Used only if the data file has no settings at all (a brand-new repository). */
+const DEFAULT_SETTINGS = {
+  boardTitle: 'Topic Planning Board',
+  clubs: [
+    { code: 'GBCC', name: 'Great Barton Computer Club', shortName: 'Great Barton', meetingDay: 'Mon' },
+    { code: 'FCC', name: 'Fornham Computer Club', shortName: 'Fornham', meetingDay: 'Tue' }
+  ],
+  categories: [
+    { code: 'WB', name: 'Windows Beginners', platform: 'Windows', start: '12:30', end: '14:00', weekFromEnd: 2,
+      colours: { fill: '#E6F0FC', line: '#9CC2EE', strong: '#4A8AD6', ink: '#1B4C86' } },
+    { code: 'WM', name: 'Windows Main', platform: 'Windows', start: '14:00', end: '16:00', weekFromEnd: 2,
+      colours: { fill: '#D3DFF5', line: '#7E9BD6', strong: '#1F4E9E', ink: '#15336E' } },
+    { code: 'IB', name: 'iPad Beginners', platform: 'iPad', start: '12:30', end: '14:00', weekFromEnd: 1,
+      colours: { fill: '#E2F4EC', line: '#94D3B8', strong: '#2FA37E', ink: '#1A6347' } },
+    { code: 'IM', name: 'iPad Main', platform: 'iPad', start: '14:00', end: '16:00', weekFromEnd: 1,
+      colours: { fill: '#D0E7D3', line: '#7FB98A', strong: '#2E7D3A', ink: '#1E5527' } }
+  ],
+  clubEvent: { code: 'EV', name: 'Club event', colours: { fill: '#F3EADC', line: '#CDB48C', strong: '#B8956A', ink: '#5C4220' } },
+  weekRule: 'eachClub',
+  breakMonths: [7, 8, 12],
+  breakNames: { 7: 'Summer break', 8: 'Summer break', 12: 'Christmas break' },
+  closures: [],
+  groupNames: {},
+  presenters: [],
+  firstMonth: '2027-01'
+};
+
+
+/* =====================================================================
+   4. DATE ENGINE
+   Pure functions: they read only the settings passed in and the calendar,
+   never the page or the clock (except todayParts, which is told the time).
+   Dates are plain 'YYYY-MM-DD' text and months 'YYYY-MM'. All arithmetic
+   uses whole days in UTC (Date.UTC), never local clock times, so British
+   Summer Time or a device in another time zone can never shift a date.
+   The tests in tests/index.html read this section straight out of this
+   file between the two markers below — keep the markers in place.
+   ===================================================================== */
+/* DATE-ENGINE-START */
+const DateEngine = (() => {
+  const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+    'August', 'September', 'October', 'November', 'December'];
+  const MONTH_SHORT = MONTH_LONG.map(m => m.slice(0, 3));
+
+  /** Two-digit text for a number: 7 -> '07'. */
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  /** 'YYYY-MM' -> { year, month } (month 1–12), or null if malformed. */
+  function parseMonth(key) {
+    const m = /^(\d{4})-(\d{2})$/.exec(String(key || ''));
+    if (!m) return null;
+    const year = Number(m[1]), month = Number(m[2]);
+    if (month < 1 || month > 12) return null;
+    return { year, month };
+  }
+
+  /** { year, month } -> 'YYYY-MM'. */
+  function monthKey(year, month) { return year + '-' + pad(month); }
+
+  /** Move a month key forwards (n > 0) or back (n < 0) by whole months. */
+  function addMonths(key, n) {
+    const p = parseMonth(key);
+    if (!p) return null;
+    const index = p.year * 12 + (p.month - 1) + n;       // months since year 0
+    return monthKey(Math.floor(index / 12), (index % 12 + 12) % 12 + 1);
+  }
+
+  /** Every month key from 'from' to 'to' inclusive (empty if to is before from). */
+  function monthsBetween(from, to) {
+    const out = [];
+    if (!parseMonth(from) || !parseMonth(to)) return out;
+    for (let k = from; k <= to && out.length < 1200; k = addMonths(k, 1)) out.push(k);
+    return out;
+  }
+
+  /** Days in a month. Day 0 of the next month is the last day of this one. */
+  function daysInMonth(year, month) { return new Date(Date.UTC(year, month, 0)).getUTCDate(); }
+
+  /** Weekday 0 (Sun) – 6 (Sat). Day numbers outside the month roll over correctly. */
+  function weekdayOf(year, month, day) { return new Date(Date.UTC(year, month - 1, day)).getUTCDay(); }
+
+  /** 'YYYY-MM-DD' from parts. */
+  function isoDate(year, month, day) { return year + '-' + pad(month) + '-' + pad(day); }
+
+  /** 'YYYY-MM-DD' -> { year, month, day }, or null if it is not a real calendar date. */
+  function parseDate(text) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(text || ''));
+    if (!m) return null;
+    const year = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
+    if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
+    return { year, month, day };
+  }
+
+  /** Meeting day as a weekday number. Accepts 'Mon', 'monday' or 0–6. */
+  function weekdayIndex(day) {
+    if (typeof day === 'number' && day >= 0 && day <= 6) return day;
+    const i = DAY_SHORT.findIndex(d => d.toLowerCase() === String(day || '').slice(0, 3).toLowerCase());
+    return i;
+  }
+
+  /** True when the month is one of the settings' break months (no meetings). */
+  function isBreakMonth(settings, key) {
+    const p = parseMonth(key);
+    return !!p && (settings.breakMonths || []).map(Number).includes(p.month);
+  }
+
+  /**
+   * The Monday-to-Sunday weeks of a month in which EVERY club's meeting day
+   * falls inside the month. Returns the day number of each week's Monday;
+   * it can be 0 or negative when the Monday itself is in the previous month.
+   * With Monday and Tuesday meetings this is every Monday whose Tuesday is
+   * in the same month.
+   */
+  function meetingWeeks(settings, key) {
+    const p = parseMonth(key);
+    if (!p) return [];
+    const dim = daysInMonth(p.year, p.month);
+    // How many days after Monday each club meets: Mon -> 0, Tue -> 1 … Sun -> 6.
+    const offsets = (settings.clubs || []).map(c => (weekdayIndex(c.meetingDay) + 6) % 7);
+    if (!offsets.length || offsets.some(o => o < 0)) return [];
+    // The Monday on or before the 1st of the month.
+    const firstMonday = 1 - (weekdayOf(p.year, p.month, 1) + 6) % 7;
+    const weeks = [];
+    for (let monday = firstMonday; monday <= dim; monday += 7) {
+      if (offsets.every(o => monday + o >= 1 && monday + o <= dim)) weeks.push(monday);
+    }
+    return weeks;
+  }
+
+  /**
+   * Every day of the month on which one club meets, e.g. all the Mondays.
+   * Returns day numbers in order.
+   */
+  function clubMeetingDays(settings, key, clubCode) {
+    const p = parseMonth(key);
+    const club = (settings.clubs || []).find(c => c.code === clubCode);
+    if (!p || !club) return [];
+    const wd = weekdayIndex(club.meetingDay);
+    if (wd < 0) return [];
+    const days = [];
+    const first = 1 + (wd - weekdayOf(p.year, p.month, 1) + 7) % 7; // first such weekday
+    for (let d = first; d <= daysInMonth(p.year, p.month); d += 7) days.push(d);
+    return days;
+  }
+
+  /**
+   * The session date and times for one club and category in one month.
+   * Returns { date, weekday, start, end, closure } or null for a break month
+   * or when the pattern cannot place it. The category's weekFromEnd picks the
+   * week: 1 = last (iPad), 2 = second-last (Windows).
+   *
+   * settings.weekRule chooses how "the last two weeks" are counted:
+   * - 'eachClub' (the default, the clubs' usual practice): each club takes its
+   *   own last two meeting days of the month. When the last Monday is the last
+   *   day of the month, GBCC keeps it and FCC's Tuesdays come a week earlier,
+   *   so no meeting falls after the month end (Nov 2026: GBCC Mon 23 and 30,
+   *   FCC Tue 17 and 24).
+   * - 'sameWeek': both clubs use the last two weeks that hold every club's
+   *   meeting day, so FCC always meets the day after GBCC (Nov 2026: GBCC
+   *   Mon 16 and 23, FCC Tue 17 and 24).
+   */
+  function sessionDate(settings, key, clubCode, categoryCode) {
+    if (isBreakMonth(settings, key)) return null;
+    const p = parseMonth(key);
+    const club = (settings.clubs || []).find(c => c.code === clubCode);
+    const cat = (settings.categories || []).find(c => c.code === categoryCode);
+    if (!p || !club || !cat) return null;
+    const n = Number(cat.weekFromEnd) || 1;
+    let day;
+    if (settings.weekRule === 'sameWeek') {
+      const weeks = meetingWeeks(settings, key);
+      const monday = weeks[weeks.length - n];
+      if (monday === undefined) return null;
+      day = monday + (weekdayIndex(club.meetingDay) + 6) % 7;
+    } else {
+      const days = clubMeetingDays(settings, key, clubCode);
+      day = days[days.length - n];
+      if (day === undefined) return null;
+    }
+    const date = isoDate(p.year, p.month, day);
+    const closure = (settings.closures || []).find(c => c.date === date && (!c.club || c.club === clubCode));
+    return {
+      date,
+      weekday: DAY_SHORT[weekdayOf(p.year, p.month, day)],
+      start: cat.start,
+      end: cat.end,
+      closure: closure ? (closure.note || 'Closed') : null
+    };
+  }
+
+  /** 'YYYY-MM-DD' -> 'Tue 19 Jan' (or 'Tue 19 Jan 2027' with year). No locale: always the same. */
+  function formatDayDate(text, withYear) {
+    const d = parseDate(text);
+    if (!d) return '';
+    return DAY_SHORT[weekdayOf(d.year, d.month, d.day)] + ' ' + d.day + ' ' + MONTH_SHORT[d.month - 1] +
+      (withYear ? ' ' + d.year : '');
+  }
+
+  /** 'YYYY-MM' -> 'January 2027', or 'Jan 2027' when short. */
+  function formatMonth(key, short) {
+    const p = parseMonth(key);
+    if (!p) return '';
+    return (short ? MONTH_SHORT : MONTH_LONG)[p.month - 1] + ' ' + p.year;
+  }
+
+  /** Month name only: 'January'. */
+  function monthName(key) { const p = parseMonth(key); return p ? MONTH_LONG[p.month - 1] : ''; }
+
+  /** '14:00' -> '2:00', '12:30' -> '12:30', '09:15' -> '9:15' (the clubs meet in daytime). */
+  function formatTime(hhmm) {
+    const m = /^(\d{2}):(\d{2})$/.exec(String(hhmm || ''));
+    if (!m) return '';
+    let h = Number(m[1]) % 12;
+    if (h === 0) h = 12;
+    return h + ':' + m[2];
+  }
+
+  /** True for a valid 24-hour 'HH:MM'. */
+  function isTime(text) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(text || '')); }
+
+  /** The calendar date of a Date object as seen on this device: { month: 'YYYY-MM', date: 'YYYY-MM-DD' }. */
+  function todayParts(now) {
+    const y = now.getFullYear(), m = now.getMonth() + 1, d = now.getDate();
+    return { month: monthKey(y, m), date: isoDate(y, m, d) };
+  }
+
+  return {
+    parseMonth, monthKey, addMonths, monthsBetween, daysInMonth, weekdayOf, isoDate, parseDate,
+    weekdayIndex, isBreakMonth, meetingWeeks, clubMeetingDays, sessionDate, formatDayDate, formatMonth, monthName,
+    formatTime, isTime, todayParts, MONTH_LONG
+  };
+})();
+/* DATE-ENGINE-END */
+
+
+/* =====================================================================
+   5. DATA LAYER
+   Reading the plan, the access key, the save queue with conflict retry,
+   and checking incoming data. Every change is an "operation" with a
+   before and after copy of the item it touches; saving re-applies the
+   queued operations to the newest copy from GitHub, so nobody's work is
+   overwritten.
+   ===================================================================== */
+
+/** A deep copy of plain JSON data. */
+function clone(value) { return JSON.parse(JSON.stringify(value)); }
+
+/** JSON text with object keys sorted, so two copies of the same item compare equal. */
+function stableJson(value) {
+  if (Array.isArray(value)) return '[' + value.map(stableJson).join(',') + ']';
+  if (value && typeof value === 'object') {
+    return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + stableJson(value[k])).join(',') + '}';
+  }
+  return JSON.stringify(value === undefined ? null : value);
+}
+
+/* --- Base64 that is safe for any text --------------------------------------
+   GitHub's Contents API sends and receives file contents as Base64.
+   The browser's btoa/atob only handle single-byte characters, so text such as
+   "Café" or curly quotes must first be turned into UTF-8 bytes. TextEncoder
+   does that; the bytes are then fed to btoa in chunks (a very long argument
+   list to String.fromCharCode can overflow the call stack).                */
+function toBase64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+function fromBase64(b64) {
+  // GitHub wraps its Base64 with line breaks; atob rejects them, so strip them first.
+  const binary = atob(String(b64).replace(/\s/g, ''));
+  const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+/* --- Local storage, always wrapped: it can be blocked or empty ------------- */
+function storeGet(name) { try { return localStorage.getItem(name); } catch (e) { return null; } }
+function storeSet(name, value) { try { localStorage.setItem(name, value); } catch (e) { /* ignore */ } }
+function storeRemove(name) { try { localStorage.removeItem(name); } catch (e) { /* ignore */ } }
+
+/**
+ * Check a plan loaded from anywhere. Returns a list of problems (empty = fine).
+ * A damaged or unknown file must never be drawn as if it were a real plan.
+ */
+function validatePlan(data) {
+  const problems = [];
+  if (!data || typeof data !== 'object') return ['The file is not a plan.'];
+  if (!data.meta || data.meta.format !== DATA_FORMAT) problems.push('The file is not in the Topic Planning Board format.');
+  else if (typeof data.meta.version !== 'number' || data.meta.version > DATA_VERSION) {
+    problems.push('The file was made by a newer version of the board (version ' + data.meta.version + ').');
+  }
+  ['settings', 'topics', 'sessions'].forEach(part => {
+    if (!data[part] || typeof data[part] !== 'object' || Array.isArray(data[part])) problems.push('The “' + part + '” part is missing.');
+  });
+  return problems;
+}
+
+/** Fill in any settings missing from an older or hand-edited file. */
+function withDefaults(data) {
+  const s = data.settings || {};
+  data.settings = Object.assign(clone(DEFAULT_SETTINGS), s);
+  if (!Array.isArray(data.settings.presenters)) data.settings.presenters = [];
+  return data;
+}
+
+/* --- Readers: the published copy --------------------------------------------
+   Loaded from this same site (GitHub Pages). No account and no rate limit.
+   The '?t=' + time on the end makes every request a different address, so
+   neither the browser nor GitHub's edge cache hands back an old copy.
+   cache: 'no-store' tells the browser not to keep or reuse a stored copy.   */
+async function loadPublishedPlan() {
+  const res = await fetch(REPO.dataPath + '?t=' + Date.now(), { cache: 'no-store' });
+  if (!res.ok) throw new Error('The plan could not be loaded (' + res.status + ').');
+  return res.json();
+}
+
+/* --- Editors: GitHub's API ---------------------------------------------------- */
+
+/**
+ * One call to GitHub's REST API with the editor's key.
+ * - Authorization: 'Bearer <key>' is how GitHub expects a personal access token.
+ * - Accept: 'application/vnd.github+json' asks for GitHub's standard JSON replies.
+ * - X-GitHub-Api-Version pins the API version, so a future GitHub change
+ *   cannot silently alter the replies the board relies on.
+ * - cache: 'no-store' so the browser never answers from its own cache; for the
+ *   "has it changed?" check we send If-None-Match ourselves (see fetchPlanFromApi).
+ * A 401 reply means the key is wrong, expired or deleted: handled centrally.
+ */
+async function github(path, options = {}) {
+  const key = state.key;
+  if (!key) throw new KeyError('No access key on this device.');
+  const res = await fetch(GITHUB_API + path, {
+    method: options.method || 'GET',
+    cache: 'no-store',
+    headers: Object.assign({
+      'Authorization': 'Bearer ' + key,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    }, options.body ? { 'Content-Type': 'application/json' } : {}, options.headers || {}),
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+  if (res.status === 401) throw new KeyError('GitHub did not accept the access key.');
+  return res;
+}
+class KeyError extends Error {}
+class ConflictError extends Error {}
+
+/** Path of the data file in the Contents API: /repos/{owner}/{repo}/contents/{path} */
+function contentsPath() {
+  return '/repos/' + REPO.owner + '/' + REPO.name + '/contents/' + REPO.dataPath;
+}
+
+/**
+ * Read the newest plan through the API.
+ * The reply holds the file as Base64 plus its "sha", a fingerprint of this exact
+ * version. A save must quote the sha it was based on (see putPlanToApi).
+ * Passing the previous ETag in If-None-Match turns this into a cheap "has it
+ * changed?" question: GitHub answers 304 Not Modified, which does not count
+ * against the hourly request allowance.
+ * ?ref= names the branch to read.
+ */
+async function fetchPlanFromApi(etag) {
+  const res = await github(contentsPath() + '?ref=' + encodeURIComponent(REPO.branch),
+    { headers: etag ? { 'If-None-Match': etag } : {} });
+  if (res.status === 304) return { unchanged: true };
+  if (res.status === 404) throw new Error('The plan file was not found in the ' + REPO.owner + '/' + REPO.name + ' repository, or the key cannot see that repository.');
+  if (!res.ok) throw new Error('GitHub could not send the plan (' + res.status + ').');
+  const body = await res.json();
+  if (!body.content) throw new Error('The plan file is too large for GitHub to send (over 1 MB). Archive a past season.');
+  return { sha: body.sha, etag: res.headers.get('ETag'), data: JSON.parse(fromBase64(body.content)) };
+}
+
+/**
+ * Save a new version of the plan: one commit to data/plan.json.
+ * - content: the whole file as Base64 (UTF-8 safe, see toBase64).
+ * - sha: the version this save replaces. If someone else has saved since,
+ *   GitHub refuses with 409 Conflict instead of overwriting their work.
+ * - message: the commit message shown in History.
+ * - branch: which branch to commit to.
+ */
+async function putPlanToApi(data, sha, message) {
+  const res = await github(contentsPath(), {
+    method: 'PUT',
+    body: {
+      message,
+      content: toBase64(JSON.stringify(data, null, 2) + '\n'),
+      sha,
+      branch: REPO.branch
+    }
+  });
+  if (res.status === 409) throw new ConflictError('Someone else saved first.');
+  if (res.status === 422) {
+    // 422 also arrives when the sha no longer matches; treat it as a conflict too.
+    const body = await res.json().catch(() => ({}));
+    if (/sha/i.test(body.message || '')) throw new ConflictError('Someone else saved first.');
+    throw new Error('GitHub refused the save: ' + (body.message || 'invalid request') + '.');
+  }
+  if (res.status === 403 || res.status === 404) {
+    throw new KeyError('This key is not allowed to save to the ' + REPO.name + ' repository. Check it has “Contents: read and write” for ' + REPO.owner + '/' + REPO.name + '.');
+  }
+  if (!res.ok) throw new Error('GitHub could not save (' + res.status + ').');
+  const body = await res.json();
+  return body.content.sha; // the new version's fingerprint
+}
+
+/**
+ * Check a key and learn who it belongs to.
+ * - GET /user names the account (used to sign each save).
+ * - GET /repos/{owner}/{repo} includes "permissions" for that account: push = may
+ *   save, admin = organization owner (owners are admins of every repository).
+ * - GitHub reports a fine-grained key's expiry in the response header
+ *   'github-authentication-token-expiration' where the browser is allowed to see
+ *   it; if it is hidden, the board says GitHub will email a reminder instead.
+ */
+async function verifyKey() {
+  const userRes = await github('/user');
+  if (!userRes.ok) throw new Error('GitHub could not check the key (' + userRes.status + ').');
+  const user = await userRes.json();
+  const expiryHeader = userRes.headers.get('github-authentication-token-expiration');
+  const repoRes = await github('/repos/' + REPO.owner + '/' + REPO.name);
+  if (repoRes.status === 404) {
+    throw new KeyError('This key cannot see the ' + REPO.owner + '/' + REPO.name + ' repository. When making the key, choose FornhamCC as the owner and the ' + REPO.name + ' repository.');
+  }
+  if (!repoRes.ok) throw new Error('GitHub could not check the repository (' + repoRes.status + ').');
+  const repo = await repoRes.json();
+  const perms = repo.permissions || {};
+  return {
+    login: user.login,
+    name: user.name || user.login,
+    canWrite: !!perms.push,
+    isOwner: !!perms.admin,
+    expires: expiryHeader ? new Date(expiryHeader.replace(' UTC', 'Z').replace(' ', 'T')) : null
+  };
+}
+
+/* --- Operations --------------------------------------------------------------
+   An operation changes one item: a topic (kind 'topic') or a session (kind
+   'session'). It records 'before' (the item as the editor saw it, or null if it
+   did not exist) and 'after' (the new item, or null to remove it).            */
+
+/** Make an operation. 'label' becomes part of the commit message. */
+function makeOp(kind, id, before, after, label) {
+  return { kind, id, before: before ? clone(before) : null, after: after ? clone(after) : null, label };
+}
+
+/** The part of the plan an operation works on. */
+function opTable(plan, op) { return op.kind === 'topic' ? plan.topics : plan.sessions; }
+
+/**
+ * Apply operations to a plan, in order. With check = true, each operation first
+ * confirms the item still matches its 'before' copy; if not, someone else changed
+ * it, and the conflicting operation is returned instead of being applied.
+ * Returns null when all were applied.
+ */
+function applyOps(plan, ops, check) {
+  for (const op of ops) {
+    const table = opTable(plan, op);
+    if (check && stableJson(table[op.id] || null) !== stableJson(op.before)) return op;
+    if (op.after) table[op.id] = clone(op.after);
+    else delete table[op.id];
+  }
+  return null;
+}
+
+/** A readable commit message for a batch of operations (kept under 200 characters). */
+function commitMessage(ops) {
+  const labels = [...new Set(ops.map(o => o.label))];
+  let msg = labels.join('; ');
+  if (msg.length > 200) msg = msg.slice(0, 197) + '…';
+  return msg || 'Update plan';
+}
+
+/* --- The save queue ----------------------------------------------------------- */
+let saveTimer = null;
+let retryTimer = null;
+let retryCount = 0;
+
+/** Queue operations: show them at once, then save after a short pause. */
+function queueOps(ops) {
+  state.pending.push(...ops);
+  rebuildLocalPlan();
+  setSaveStatus('pending');
+  scheduleSave(SAVE_DELAY);
+}
+
+/** (Re)start the save timer. */
+function scheduleSave(delay) {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(runSave, delay);
+}
+
+/** The on-screen plan = newest GitHub copy + operations not yet saved. */
+function rebuildLocalPlan() {
+  const plan = clone(state.remote.data);
+  applyOps(plan, state.pending, false);
+  state.plan = plan;
+  render();
+}
+
+/**
+ * Save everything queued as ONE commit.
+ * 1. Start from the newest copy known from GitHub and re-apply the queued
+ *    operations, checking each against its 'before' copy.
+ * 2. Send it with the sha of that copy.
+ * 3. If GitHub says someone saved in between (conflict), fetch their version
+ *    and go back to step 1. If an operation no longer fits, drop it and explain.
+ * 4. If the network fails, keep everything queued and try again later.
+ */
+async function runSave() {
+  if (state.saving || !state.pending.length) return;
+  if (!state.key || !state.account) { setSaveStatus('locked'); return; }
+  state.saving = true;
+  clearTimeout(retryTimer);
+  setSaveStatus('saving');
+  const batch = state.pending.slice();   // operations added during the save wait for the next one
+  try {
+    for (let attempt = 0; ; attempt++) {
+      const next = clone(state.remote.data);
+      const clash = applyOps(next, batch, true);
+      if (clash) {
+        dropConflict(clash);
+        state.saving = false;
+        if (state.pending.length) scheduleSave(0);
+        return;
+      }
+      next.meta = Object.assign({}, next.meta, {
+        format: DATA_FORMAT, version: DATA_VERSION,
+        savedAt: new Date().toISOString(), savedBy: state.account.login
+      });
+      try {
+        const sha = await putPlanToApi(next, state.remote.sha, commitMessage(batch));
+        state.remote = { sha, etag: null, data: next };
+        state.pending.splice(0, batch.length);
+        retryCount = 0;
+        break;
+      } catch (err) {
+        if (!(err instanceof ConflictError) || attempt >= 4) throw err;
+        // Someone else saved first: fetch their version and try again on top of it.
+        const latest = await fetchPlanFromApi(null);
+        state.remote = { sha: latest.sha, etag: latest.etag, data: withDefaults(latest.data) };
+      }
+    }
+    state.saving = false;
+    rebuildLocalPlan();
+    if (state.pending.length) scheduleSave(SAVE_DELAY);
+    else setSaveStatus('saved');
+  } catch (err) {
+    state.saving = false;
+    if (err instanceof KeyError) { handleKeyRejected(err.message); return; }
+    // Network or GitHub trouble: keep the changes and retry with growing gaps.
+    const delay = RETRY_DELAYS[Math.min(retryCount, RETRY_DELAYS.length - 1)];
+    retryCount++;
+    setSaveStatus('retrying', err.message);
+    retryTimer = setTimeout(runSave, delay);
+  }
+}
+
+/**
+ * Remove an operation that clashed with someone else's change, and explain.
+ * Operations made by one action (a move is two: take the tile out of one cell,
+ * put it in another) share a 'group'. The whole group is dropped together, so a
+ * move can never be left half done. Its undo entry goes too.
+ */
+function dropConflict(op) {
+  const dropped = op.group ? state.pending.filter(o => o.group === op.group) : [op];
+  state.pending = state.pending.filter(o => !dropped.includes(o));
+  if (op.group) state.undo = state.undo.filter(u => u.group !== op.group);
+  const what = op.kind === 'topic'
+    ? 'the topic “' + ((op.after || op.before || {}).title || 'untitled') + '”'
+    : 'the ' + describeSession(op.id) + ' session';
+  addMessage('warn', 'Your change (' + op.label + ') was not saved, because ' + what + ' was changed on another device first. ' +
+    'The board now shows the newer version; please make your change again if it is still needed.');
+  rebuildLocalPlan();
+  setSaveStatus(state.pending.length ? 'pending' : 'saved');
+}
+
+/** The key was refused: go read-only, keep queued changes, ask for a new key. */
+function handleKeyRejected(reason) {
+  storeRemove(STORE.key);
+  state.key = null;
+  state.account = null;
+  state.mode = 'view';
+  setSaveStatus(state.pending.length ? 'locked' : 'idle');
+  render();
+  openUnlockDialog(true, reason);
+}
+
+
+/* =====================================================================
+   6. APP STATE
+   One in-memory copy of everything the page shows. Changing the plan always
+   goes through queueOps; changing the view calls render().
+   ===================================================================== */
+const state = {
+  plan: null,                 // what is drawn: newest copy + unsaved operations
+  remote: null,               // { sha, etag, data }: newest copy known from GitHub (sha null for readers)
+  pending: [],                // operations not yet saved
+  saving: false,
+  key: null,                  // the editor's access key on this device
+  account: null,              // { login, name, canWrite, isOwner, expires } once unlocked
+  mode: 'view',               // 'view' or 'edit' (the Edit switch)
+  view: 'board',              // 'board', 'pdfs' or 'settings'
+  platform: 'all',            // 'all', 'Windows' or 'iPad'
+  groupBy: 'category',        // 'category' or 'club'
+  range: { from: null, to: null },
+  lastLoaded: null,           // when the plan was last read
+  details: null,              // the open details panel: { key, topicId, topicBefore, sessionBefore, editing }
+  // --- Stage 2: editing the board ---
+  undo: [],                   // undo entries, newest last: { group, label, ops }
+  pick: null,                 // what is selected: { kind: 'tile', key } or { kind: 'topic', topicId, from: 'tray' | 'copy' }
+  clipboard: null,            // id of the copied topic (kept in the page, not the system clipboard)
+  cursorKey: null,            // the empty cell last tapped, where Paste and New topic act
+  prompt: null,               // a pairing suggestion shown in the strip: { text, button, run }
+  trayOpen: true,             // the tray is open when docked beside the board (remembered)
+  trayOverlay: false,         // the tray is open over the board on narrower screens (not remembered)
+  trayFilter: 'upcoming',     // 'needs', 'upcoming' or 'all'
+  drag: null                  // the drag in progress (see section 8)
+};
+
+/** Today on this device, worked out fresh each time it is needed. */
+function today() { return DateEngine.todayParts(new Date()); }
+
+/** Remembered per-viewer choices (filters, column grouping). */
+function loadPrefs() {
+  try {
+    const p = JSON.parse(storeGet(STORE.prefs) || '{}');
+    if (['all', 'Windows', 'iPad'].includes(p.platform)) state.platform = p.platform;
+    if (['category', 'club'].includes(p.groupBy)) state.groupBy = p.groupBy;
+    if (['needs', 'upcoming', 'all'].includes(p.trayFilter)) state.trayFilter = p.trayFilter;
+    if (typeof p.trayOpen === 'boolean') state.trayOpen = p.trayOpen;
+  } catch (e) { /* ignore */ }
+}
+function savePrefs() {
+  storeSet(STORE.prefs, JSON.stringify({
+    platform: state.platform, groupBy: state.groupBy, trayFilter: state.trayFilter, trayOpen: state.trayOpen
+  }));
+}
+
+/** True when this device may edit right now. */
+function canEdit() { return !!(state.account && state.account.canWrite && state.mode === 'edit'); }
+
+/* --- Small look-ups ------------------------------------------------------------ */
+function settings() { return state.plan.settings; }
+function categoryOf(code) {
+  const s = settings();
+  if (code === CLUB_EVENT) return s.clubEvent;
+  return s.categories.find(c => c.code === code);
+}
+function clubOf(code) { return settings().clubs.find(c => c.code === code); }
+function sessionKey(month, club, cat) { return month + '_' + club + '_' + cat; }
+function parseSessionKey(key) {
+  const [month, club, cat] = String(key).split('_');
+  return { month, club, cat };
+}
+function groupName(club, cat) {
+  return settings().groupNames[club + '_' + cat] || (club + ' ' + (categoryOf(cat) || {}).name);
+}
+function describeSession(key) {
+  const p = parseSessionKey(key);
+  return groupName(p.club, p.cat) + ', ' + DateEngine.formatMonth(p.month, true);
+}
+function presenterName(code) {
+  const p = settings().presenters.find(x => x.code === code);
+  return p ? p.name : code;
+}
+/** Every session that shows this topic, in date order. */
+function sessionsOfTopic(topicId) {
+  return Object.entries(state.plan.sessions)
+    .filter(([, s]) => s.topicId === topicId)
+    .sort((a, b) => (a[1].date + a[0]).localeCompare(b[1].date + b[0]));
+}
+/** The columns to draw, in order, according to the filter and grouping. */
+function visibleColumns() {
+  const s = settings();
+  const cats = CATEGORY_ORDER
+    .map(code => s.categories.find(c => c.code === code))
+    .filter(c => c && (state.platform === 'all' || c.platform === state.platform));
+  const cols = [];
+  if (state.groupBy === 'club') s.clubs.forEach(club => cats.forEach(cat => cols.push({ club, cat })));
+  else cats.forEach(cat => s.clubs.forEach(club => cols.push({ club, cat })));
+  return cols;
+}
+/** The months the range selector offers. */
+function selectableMonths() {
+  const last = DateEngine.addMonths(today().month, MONTHS_AHEAD);
+  return DateEngine.monthsBetween(EARLIEST_MONTH, last > '2028-07' ? last : '2028-07');
+}
+
+
+/* =====================================================================
+   7. RENDERING
+   render() rebuilds whatever is on show from the in-memory plan. With under
+   200 items this is instant, and there is only one drawing path to keep right.
+   All text goes in with textContent, never as markup.
+   ===================================================================== */
+
+/**
+ * Create an element. props: class, text, attrs (set as attributes), vars
+ * (CSS custom properties such as '--fill'), on (event handlers), and any
+ * other DOM property. Children may be elements, text or arrays.
+ */
+function el(tag, props, ...children) {
+  const node = document.createElement(tag);
+  const p = props || {};
+  Object.keys(p).forEach(k => {
+    const v = p[k];
+    if (v === undefined || v === null || v === false) return;
+    if (k === 'class') node.className = v;
+    else if (k === 'text') node.textContent = v;
+    else if (k === 'attrs') Object.keys(v).forEach(a => { if (v[a] !== null && v[a] !== undefined && v[a] !== false) node.setAttribute(a, v[a] === true ? '' : v[a]); });
+    else if (k === 'vars') Object.keys(v).forEach(name => node.style.setProperty(name, v[name]));
+    else if (k === 'on') Object.keys(v).forEach(evt => node.addEventListener(evt, v[evt]));
+    else node[k] = v;
+  });
+  children.flat(Infinity).forEach(c => {
+    if (c === null || c === undefined || c === false) return;
+    node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  });
+  return node;
+}
+
+/** Append children, skipping empty ones (the DOM's own append would print "null"). */
+function appendAll(node, ...children) {
+  children.flat(Infinity).forEach(c => { if (c !== null && c !== undefined && c !== false) node.append(c); });
+}
+
+/** An icon from the constant ICONS table. */
+function icon(name) {
+  const span = el('span', { class: 'icon', attrs: { 'aria-hidden': 'true' } });
+  span.innerHTML = ICONS[name]; // constant markup from this file, never data
+  return span;
+}
+
+/** CSS custom properties carrying a category's colours to tiles and headers. */
+function colourVars(cat) {
+  const c = (cat && cat.colours) || {};
+  return { '--fill': c.fill, '--line-c': c.line, '--strong': c.strong, '--ink-c': c.ink };
+}
+
+/** Redraw everything currently shown. */
+function render() {
+  if (!state.plan) return;
+  // Redrawing would remove the tile under a finger mid-drag (and with it the
+  // touch events), so while dragging the redraw waits until the drop.
+  if (state.drag && state.drag.active) { state.drag.renderLater = true; return; }
+  tidySelection();
+  renderHeader();
+  if (state.view === 'board') { renderBoard(); renderTray(); renderStrip(); }
+  if (state.view === 'settings') renderSettings();
+  // Redraw an open details panel only when it is read-only: an editable form is
+  // left alone so nothing typed is lost; saving compares against what it opened with.
+  if (state.details && document.getElementById('detailsSheet').open && !(state.details.editing && canEdit())) renderDetails();
+}
+
+/** Header bars: title, view tabs, role, unlock button or Edit switch, filters, range. */
+function renderHeader() {
+  const s = settings();
+  document.getElementById('boardTitle').textContent = s.boardTitle || 'Topic Planning Board';
+  document.getElementById('boardSub').textContent = s.clubs.map(c => c.shortName || c.name).join(' & ') + ' Computer Clubs';
+  document.title = s.boardTitle || 'Topic Planning Board';
+
+  document.querySelectorAll('.views button').forEach(b => {
+    if (b.dataset.view === state.view) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  });
+  document.getElementById('bar2').hidden = state.view !== 'board';
+  document.getElementById('boardView').hidden = state.view !== 'board';
+  // Editing tools (Undo, Topics, New topic) appear only while editing.
+  document.getElementById('editTools').hidden = !canEdit();
+  const undoBtn = document.getElementById('undoBtn');
+  const lastUndo = state.undo[state.undo.length - 1];
+  undoBtn.disabled = !lastUndo;
+  undoBtn.title = lastUndo ? 'Undo: ' + lastUndo.label + ' (Ctrl+Z)' : 'Nothing to undo';
+  document.getElementById('trayBtn').setAttribute('aria-expanded', String(trayShown()));
+  document.getElementById('testBanner').hidden = !IS_TEST_COPY;
+  document.getElementById('pdfsView').hidden = state.view !== 'pdfs';
+  document.getElementById('settingsView').hidden = state.view !== 'settings';
+
+  const unlocked = !!state.account;
+  const role = document.getElementById('roleChip');
+  role.hidden = !unlocked;
+  role.textContent = unlocked ? (state.account.isOwner ? 'Owner' : 'Editor') : '';
+  document.getElementById('unlockBtn').hidden = unlocked;
+  const sw = document.getElementById('editSwitch');
+  sw.hidden = !(unlocked && state.account.canWrite);
+  sw.setAttribute('aria-checked', String(state.mode === 'edit'));
+
+  document.querySelectorAll('#platformFilter button').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.platform === state.platform)));
+  document.getElementById('groupBySelect').value = state.groupBy;
+  document.getElementById('rangeLabel').textContent =
+    DateEngine.formatMonth(state.range.from, true) + ' – ' + DateEngine.formatMonth(state.range.to, true);
+  if (!state.pending.length && !state.saving) setSaveStatus(null);
+}
+
+/**
+ * The save status in the header. Readers see when the plan was last read;
+ * editors see the state of their saves.
+ */
+function setSaveStatus(kind, detail) {
+  const box = document.getElementById('saveStatus');
+  let tone = 'ok', ic = 'cloudOk', text = '';
+  if (!kind) kind = state.account ? 'saved' : 'reader';
+  switch (kind) {
+    case 'reader':
+      tone = 'muted'; ic = 'eye';
+      text = 'View only' + (state.lastLoaded ? ' · updated ' + state.lastLoaded.toTimeString().slice(0, 5) : '');
+      break;
+    case 'pending': tone = 'busy'; ic = 'cloudBusy'; text = 'Unsaved changes'; break;
+    case 'saving': tone = 'busy'; ic = 'cloudBusy'; text = 'Saving…'; break;
+    case 'saved': tone = 'ok'; ic = 'cloudOk'; text = 'Up to date · saved for everyone'; break;
+    case 'retrying': tone = 'warn'; ic = 'cloudWarn'; text = 'Not saved — retrying'; break;
+    case 'locked': tone = 'bad'; ic = 'cloudWarn'; text = 'Not saved — needs a new key'; break;
+    default: tone = 'muted'; ic = 'eye'; text = '';
+  }
+  box.dataset.tone = tone;
+  box.replaceChildren(icon(ic), el('span', { text }));
+  box.title = detail || '';
+}
+
+/** The month grid: two header rows, then one row per month (breaks merged). */
+function renderBoard() {
+  const board = document.getElementById('board');
+  document.getElementById('loading').hidden = true;
+  const s = settings();
+  const cols = visibleColumns();
+  const now = today();
+  // Fixed month column, then one flexible column per group.
+  board.style.gridTemplateColumns = 'var(--month-col) repeat(' + cols.length + ', minmax(var(--group-col), 1fr))';
+  board.classList.toggle('is-editing', canEdit());
+  const targets = currentTargets();   // cells to light up for the selection or drag
+
+  const parts = [];
+  // Header row 1: the corner and the category (or club) bands, each spanning its columns.
+  const head1 = el('div', { class: 'row', attrs: { role: 'row' } },
+    el('div', { class: 'corner', attrs: { role: 'columnheader' }, text: 'MONTH' }));
+  const head2 = el('div', { class: 'row', attrs: { role: 'row' } });
+  let i = 0;
+  while (i < cols.length) {
+    const groupKey = state.groupBy === 'club' ? cols[i].club.code : cols[i].cat.code;
+    let span = 1;
+    while (i + span < cols.length && (state.groupBy === 'club' ? cols[i + span].club.code : cols[i + span].cat.code) === groupKey) span++;
+    const band = state.groupBy === 'club'
+      ? el('div', { class: 'hcell band dark', text: cols[i].club.name, attrs: { role: 'columnheader' } })
+      : el('div', { class: 'hcell band', text: cols[i].cat.name, vars: colourVars(cols[i].cat), attrs: { role: 'columnheader' } });
+    band.style.gridColumn = 'span ' + span;
+    head1.append(band);
+    i += span;
+  }
+  cols.forEach((col, n) => {
+    const first = n === 0 || (state.groupBy === 'club' ? cols[n - 1].club.code !== col.club.code : cols[n - 1].cat.code !== col.cat.code);
+    head2.append(el('div', {
+      class: 'hcell sub' + (first ? ' first' : ''), attrs: { role: 'columnheader' },
+      vars: colourVars(col.cat)
+    }, state.groupBy === 'club'
+      ? [el('span', { class: 'swatch', attrs: { 'aria-hidden': 'true' } }), col.cat.name]
+      : col.club.code));
+  });
+  parts.push(head1, head2);
+
+  // Month rows. Consecutive break months share one hatched band.
+  const months = DateEngine.monthsBetween(state.range.from, state.range.to);
+  for (let m = 0; m < months.length; m++) {
+    const key = months[m];
+    if (DateEngine.isBreakMonth(s, key)) {
+      let end = m;
+      while (end + 1 < months.length && DateEngine.isBreakMonth(s, months[end + 1])) end++;
+      const label = (s.breakNames && s.breakNames[DateEngine.parseMonth(key).month]) || 'Break';
+      const first = DateEngine.monthName(key).slice(0, 3), last = DateEngine.monthName(months[end]).slice(0, 3);
+      parts.push(el('div', { class: 'row is-break', attrs: { role: 'row' } },
+        el('div', { class: 'mcell', attrs: { role: 'rowheader' } },
+          el('span', { class: 'm', text: end > m ? first + ' – ' + last : DateEngine.monthName(key) }),
+          el('span', { class: 'y', text: DateEngine.parseMonth(key).year })),
+        el('div', { class: 'break-band', attrs: { role: 'cell' }, text: label + ' — no meetings' })));
+      m = end;
+      continue;
+    }
+    parts.push(renderMonthRow(key, cols, now, targets));
+  }
+  board.replaceChildren(...parts);
+}
+
+/** One month's row: the month cell plus a cell per visible group. */
+function renderMonthRow(key, cols, now, targets) {
+  const isCurrent = key === now.month;
+  const row = el('div', {
+    class: 'row' + (isCurrent ? ' is-current' : '') + (key < now.month ? ' is-past' : ''),
+    attrs: { role: 'row', 'data-month': key }
+  });
+  row.append(el('div', { class: 'mcell', attrs: { role: 'rowheader' } },
+    el('span', { class: 'm', text: DateEngine.monthName(key) }),
+    el('span', { class: 'y', text: DateEngine.parseMonth(key).year }),
+    isCurrent ? el('span', { class: 'now-chip', text: 'This month' }) : null));
+
+  cols.forEach((col, n) => {
+    const first = n === 0 || (state.groupBy === 'club' ? cols[n - 1].club.code !== col.club.code : cols[n - 1].cat.code !== col.cat.code);
+    const sKey = sessionKey(key, col.club.code, col.cat.code);
+    const session = state.plan.sessions[sKey];
+    const cell = el('div', {
+      class: 'cell' + (first ? ' first' : '') +
+        (targets.has(sKey) ? ' lit' + (session ? ' occupied' : '') : '') +
+        (state.cursorKey === sKey && !session ? ' is-cursor' : ''),
+      attrs: { role: 'cell', 'data-key': sKey }
+    });
+    if (session) {
+      cell.append(renderTile(sKey, session, col));
+    } else {
+      const pattern = DateEngine.sessionDate(settings(), key, col.club.code, col.cat.code);
+      const hint = pattern
+        ? (pattern.closure
+            ? [el('span', { class: 'nowrap', text: DateEngine.formatDayDate(pattern.date) }), ' · ', pattern.closure]
+            : whenParts(pattern.date, pattern.start, pattern.end))
+        : null;
+      if (canEdit() && pattern) {
+        // In Edit mode the empty cell is a button: tap to place the selected
+        // topic here, or (with nothing selected) to make or paste one here.
+        cell.append(el('button', {
+          type: 'button', class: 'cell-btn' + (pattern.closure ? ' hint closed' : ''),
+          attrs: { 'aria-label': (targets.has(sKey) ? 'Place here: ' : 'Empty: ') + groupName(col.club.code, col.cat.code) + ', ' + DateEngine.formatDayDate(pattern.date, true) },
+          on: { click: () => handleCellTap(sKey) }
+        }, el('span', {}, hint)));
+      } else if (hint) {
+        cell.append(el('div', { class: 'hint' + (pattern.closure ? ' closed' : '') }, hint));
+      }
+    }
+    row.append(cell);
+  });
+  return row;
+}
+
+/** 'Tue 19 Jan · 12:30–2:00' as pieces that only wrap between the date and the times. */
+function whenParts(date, start, end) {
+  return [
+    el('span', { class: 'nowrap', text: DateEngine.formatDayDate(date) }), ' · ',
+    el('span', { class: 'nowrap', text: DateEngine.formatTime(start) + '–' + DateEngine.formatTime(end) })
+  ];
+}
+
+/**
+ * A placed session's tile. Its colour comes from the topic's category (club
+ * events are bronze). In View mode a tap opens the details; in Edit mode a tap
+ * selects the tile (a second tap opens the details) and a drag moves it.
+ */
+function renderTile(sKey, session, col) {
+  const topic = state.plan.topics[session.topicId] || { title: '(missing topic)', category: col.cat.code };
+  const cat = categoryOf(topic.category) || col.cat;
+  const cancelled = session.status === 'cancelled';
+  const selected = state.pick && state.pick.kind === 'tile' && state.pick.key === sKey;
+  const dragging = state.drag && state.drag.active && state.drag.source.kind === 'tile' && state.drag.source.key === sKey;
+  const whenText = DateEngine.formatDayDate(session.date) + ' · ' +
+    DateEngine.formatTime(session.start) + '–' + DateEngine.formatTime(session.end);
+  return el('button', {
+    type: 'button',
+    class: 'tile' + (cancelled ? ' cancelled' : '') + (selected ? ' is-selected' : '') + (dragging ? ' is-drag-source' : ''),
+    vars: colourVars(cat),
+    attrs: {
+      'aria-label': topic.title + ', ' + whenText + (cancelled ? ', cancelled' : '') +
+        (canEdit() ? (selected ? '. Selected. Press again for details.' : '. Select to move, copy or remove.') : '. Open details.'),
+      'aria-pressed': canEdit() ? String(!!selected) : null,
+      'data-drag': canEdit() ? 'tile' : null
+    },
+    on: { click: () => handleTileTap(sKey) }
+  },
+  el('div', { class: 'when-line' },
+    el('span', { class: 'when' + (session.moved ? ' moved' : '') }, whenParts(session.date, session.start, session.end)),
+    topic.presenter ? el('span', { class: 'pres', text: topic.presenter, title: presenterName(topic.presenter) }) : null),
+  el('div', { class: 'title', text: topic.title }),
+  el('div', { class: 'flags' },
+    topic.category === CLUB_EVENT ? el('span', { class: 'chip chip-event', text: cat.name }) : null,
+    cancelled ? el('span', { class: 'chip chip-cancelled', text: 'Cancelled' }) : null,
+    session.moved ? el('span', { class: 'chip chip-moved', text: 'Moved' }) : null,
+    topic.invitesSent ? el('span', { class: 'chip chip-invites', title: 'Invitations sent to members' }, icon('check'), 'Invites sent') : null,
+    topic.notesUrl ? el('span', { title: 'Tutorial notes linked' }, icon('clip')) : null,
+    topic.briefing ? el('span', { title: 'Members’ briefing written' }, icon('doc')) : null));
+}
+
+/* --- The topic tray ------------------------------------------------------------ */
+
+/** True when the tray should sit beside the board rather than slide over it. */
+function trayDocked() { return window.innerWidth >= TRAY_DOCK_WIDTH; }
+/** True when the tray is on screen. Only editors see it. */
+function trayShown() { return canEdit() && (trayDocked() ? state.trayOpen : state.trayOverlay); }
+
+/**
+ * Where a topic is placed, per club: each club's sessions in date order.
+ * A topic is "past" when it has sessions and all of them are before today.
+ */
+function topicPlacement(topicId) {
+  const byClub = {};
+  settings().clubs.forEach(c => { byClub[c.code] = []; });
+  const all = sessionsOfTopic(topicId);
+  all.forEach(([k, s]) => { (byClub[s.club] = byClub[s.club] || []).push([k, s]); });
+  const todayDate = today().date;
+  return {
+    byClub,
+    count: all.length,
+    past: all.length > 0 && all.every(([, s]) => s.date < todayDate),
+    firstDate: all.length ? all[0][1].date : null
+  };
+}
+
+/** Which topics the tray lists, in order: category, then first date (unplaced last), then title. */
+function trayTopics() {
+  const order = CATEGORY_ORDER.concat([CLUB_EVENT]);
+  return Object.entries(state.plan.topics)
+    .map(([id, t]) => ({ id, t, p: topicPlacement(id) }))
+    .filter(({ t }) => {
+      if (state.platform === 'all' || t.category === CLUB_EVENT) return true;
+      const cat = categoryOf(t.category);
+      return cat && cat.platform === state.platform;
+    })
+    .filter(({ t, p }) => {
+      if (state.trayFilter === 'all') return true;
+      if (p.past) return false;                                  // past topics: only under "All"
+      if (state.trayFilter === 'needs') {
+        // Needs placing: a club event not placed anywhere, or a group topic missing from a club.
+        if (t.category === CLUB_EVENT) return p.count === 0;
+        return settings().clubs.some(c => !p.byClub[c.code].length);
+      }
+      return true;
+    })
+    .sort((a, b) =>
+      order.indexOf(a.t.category) - order.indexOf(b.t.category) ||
+      String(a.p.firstDate || '9999').localeCompare(String(b.p.firstDate || '9999')) ||
+      a.t.title.localeCompare(b.t.title));
+}
+
+/** Draw the tray: filters, a card per topic with where it is placed, New topic. */
+function renderTray() {
+  const tray = document.getElementById('tray');
+  const shown = trayShown();
+  tray.hidden = !shown;
+  if (!shown) return;
+  tray.classList.toggle('overlay', !trayDocked());
+  tray.classList.toggle('can-drag', canEdit());
+  const filters = [['needs', 'Needs placing'], ['upcoming', 'Upcoming'], ['all', 'All']];
+  const list = trayTopics();
+  const head = el('div', { class: 'tray-head' },
+    el('div', { class: 'top' },
+      el('h2', { text: 'Topics' }),
+      el('button', { type: 'button', class: 'btn btn-quiet btn-icon', attrs: { 'aria-label': 'Close the topic tray' }, on: { click: toggleTray } }, icon('close'))),
+    el('div', { class: 'segmented', attrs: { role: 'group', 'aria-label': 'Topics listed' } },
+      filters.map(([value, label]) => el('button', {
+        type: 'button', text: label, attrs: { 'aria-pressed': String(state.trayFilter === value) },
+        on: { click: () => { state.trayFilter = value; savePrefs(); renderTray(); } }
+      }))));
+  const body = el('div', { class: 'tray-list' });
+  if (!list.length) {
+    body.append(el('p', { class: 'tray-empty', text: state.trayFilter === 'needs'
+      ? 'Every topic is placed at both clubs. Press New topic to add another.'
+      : 'No topics yet. Press New topic to add one.' }));
+  }
+  list.forEach(({ id, t, p }) => body.append(renderTrayCard(id, t, p)));
+  const foot = el('div', { class: 'tray-foot' },
+    el('button', { type: 'button', class: 'btn btn-dark', on: { click: () => openNewTopic(null) } }, icon('plus'), 'New topic'));
+  tray.replaceChildren(head, body, foot);
+}
+
+/** One topic in the tray. Badges show, for each club, where it is placed. */
+function renderTrayCard(id, topic, placement) {
+  const cat = categoryOf(topic.category);
+  const selected = state.pick && state.pick.kind === 'topic' && state.pick.topicId === id;
+  const dragging = state.drag && state.drag.active && state.drag.source.kind === 'topic' && state.drag.source.topicId === id;
+  const todayDate = today().date;
+  const badges = settings().clubs.map(club => {
+    const list = placement.byClub[club.code] || [];
+    if (!list.length) return el('span', { class: 'badge', text: club.code + ' · not placed' });
+    // Show the next date from today (or the last one if all are past), plus how many more.
+    const next = list.find(([, s]) => s.date >= todayDate) || list[list.length - 1];
+    return el('span', { class: 'badge placed', text: club.code + ' ✓ ' + DateEngine.formatDayDate(next[1].date) + (list.length > 1 ? ' +' + (list.length - 1) : '') });
+  });
+  return el('button', {
+    type: 'button',
+    class: 'tray-card' + (selected ? ' is-selected' : '') + (dragging ? ' is-drag-source' : ''),
+    vars: colourVars(cat),
+    attrs: {
+      'data-drag': 'topic', 'data-topic': id, 'aria-pressed': String(!!selected),
+      'aria-label': topic.title + ', ' + (cat ? cat.name : '') + '. ' + (selected ? 'Selected. Press again for details.' : 'Select to place it on the board.')
+    },
+    on: { click: () => handleTrayTap(id) }
+  },
+  el('div', { class: 'top' },
+    el('span', { class: 'title', text: topic.title }),
+    topic.presenter ? el('span', { class: 'pres', text: topic.presenter, title: presenterName(topic.presenter) }) : null),
+  el('span', { class: 'cat', text: cat ? cat.name : '' }),
+  el('div', { class: 'badges' }, badges,
+    topic.invitesSent ? el('span', { class: 'badge placed', text: '✓ Invites sent' }) : null));
+}
+
+/* --- The placing strip ------------------------------------------------------------ */
+
+/** A button for the strip. */
+function stripButton(label, iconName, onClick, extraClass) {
+  return el('button', { type: 'button', class: 'btn ' + (extraClass || ''), on: { click: onClick } },
+    iconName ? icon(iconName) : null, label);
+}
+
+/**
+ * The strip above the board says what the current selection will do and offers
+ * the actions that go with it. A pairing suggestion takes priority over the rest.
+ */
+function renderStrip() {
+  const strip = document.getElementById('strip');
+  const parts = stripContent();
+  strip.hidden = !parts;
+  if (parts) strip.replaceChildren(el('div', { class: 'text' }, parts.text), el('div', { class: 'actions' }, parts.actions));
+}
+function stripContent() {
+  if (!canEdit() || state.view !== 'board') return null;
+  if (state.prompt) {
+    return {
+      text: state.prompt.text,
+      actions: [stripButton(state.prompt.button, null, runPrompt, 'btn-dark'), stripButton('Not now', null, () => { state.prompt = null; renderStrip(); })]
+    };
+  }
+  const pick = state.pick;
+  if (pick && pick.kind === 'tile') {
+    const session = state.plan.sessions[pick.key];
+    const topic = state.plan.topics[session.topicId] || {};
+    return {
+      text: [el('strong', { text: topic.title }), ' — ' + describeSession(pick.key) + '. Tap a lit cell to move it.'],
+      actions: [
+        stripButton('Details', 'edit', () => openDetails(pick.key)),
+        stripButton('Copy', 'copy', () => copyTopic(session.topicId)),
+        stripButton('Remove from board', 'remove', () => removeSession(pick.key)),
+        stripButton('Cancel', null, clearPick)]
+    };
+  }
+  if (pick && pick.kind === 'topic') {
+    const topic = state.plan.topics[pick.topicId] || {};
+    const count = currentTargets().size;
+    const where = count ? ' Tap a lit cell to place it.' : ' There is no free cell for it in the months shown.';
+    return {
+      text: [pick.from === 'copy' ? 'Copied ' : '', el('strong', { text: topic.title }), '.' + where],
+      actions: [
+        stripButton('Details', 'edit', () => openTopicDetails(pick.topicId)),
+        stripButton('Cancel', null, clearPick)]
+    };
+  }
+  if (state.cursorKey && !state.plan.sessions[state.cursorKey]) {
+    const p = parseSessionKey(state.cursorKey);
+    const pattern = DateEngine.sessionDate(settings(), p.month, p.club, p.cat);
+    const clip = state.clipboard && state.plan.topics[state.clipboard];
+    const actions = [stripButton('New topic here', 'plus', () => openNewTopic(state.cursorKey), 'btn-dark')];
+    if (clip && topicFitsCell(state.clipboard, state.cursorKey)) {
+      actions.push(stripButton('Paste “' + clip.title + '”', 'paste', () => pasteInto(state.cursorKey)));
+    }
+    actions.push(stripButton('Close', null, clearPick));
+    return {
+      text: [el('strong', { text: groupName(p.club, p.cat) }), pattern ? ' — ' + DateEngine.formatDayDate(pattern.date, true) + ', ' +
+        DateEngine.formatTime(pattern.start) + '–' + DateEngine.formatTime(pattern.end) : ''],
+      actions
+    };
+  }
+  return null;
+}
+
+/** Settings page: editing access now; club, pattern and presenter editing come in Stage 3. */
+function renderSettings() {
+  const s = settings();
+  const box = document.getElementById('settingsInner');
+  const acct = state.account;
+  const access = el('section', { class: 'card' }, el('h2', { text: 'Editing access' }));
+  if (acct) {
+    const expiry = acct.expires
+      ? acct.expires.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+      : 'Not shown to the board. GitHub emails you a week before it expires.';
+    access.append(
+      el('dl', { class: 'kv' },
+        el('dt', { text: 'Unlocked as' }), el('dd', { text: acct.name + ' (' + acct.login + ')' }),
+        el('dt', { text: 'Role' }), el('dd', { text: acct.isOwner ? 'Owner — can use every feature' : 'Editor' }),
+        el('dt', { text: 'Key expires' }), el('dd', { text: expiry })),
+      el('p', { class: 'note', text: 'The key is remembered on this device only. To renew it, open your keys on GitHub, choose this key and press “Regenerate token”, then paste the new key here.' }),
+      el('div', { class: 'actions' },
+        el('a', { class: 'btn', href: KEY_SETTINGS_URL, target: '_blank', rel: 'noopener noreferrer' }, icon('open'), 'Renew key on GitHub'),
+        el('button', { type: 'button', class: 'btn', on: { click: () => openUnlockDialog(false) } }, 'Paste new key'),
+        el('button', { type: 'button', class: 'btn btn-danger-text', on: { click: removeKey } }, 'Remove key from this device')));
+  } else {
+    access.append(
+      el('p', { text: 'This device is view-only. Editors unlock it once with their GitHub access key.' }),
+      el('div', { class: 'actions' },
+        el('button', { type: 'button', class: 'btn btn-dark', on: { click: () => openUnlockDialog(false) } }, icon('lock'), 'Unlock editing')));
+  }
+
+  const pattern = el('section', { class: 'card' },
+    el('h2', { text: 'Meeting pattern' }),
+    el('p', { class: 'note', text: 'Shown for checking. Changing these here arrives in a later stage; until then they are edited in data/plan.json.' }),
+    el('table', { class: 'simple' },
+      el('thead', {}, el('tr', {}, el('th', { text: 'Club' }), el('th', { text: 'Code' }), el('th', { text: 'Meets on' }))),
+      el('tbody', {}, s.clubs.map(c => el('tr', {}, el('td', { text: c.name }), el('td', { text: c.code }), el('td', { text: c.meetingDay }))))),
+    el('h3', { text: 'Groups' }),
+    el('table', { class: 'simple' },
+      el('thead', {}, el('tr', {}, el('th', { text: 'Category' }), el('th', { text: 'Time' }), el('th', { text: 'Week' }))),
+      el('tbody', {}, s.categories.map(c => el('tr', {},
+        el('td', { text: c.name }),
+        el('td', { text: DateEngine.formatTime(c.start) + '–' + DateEngine.formatTime(c.end) }),
+        el('td', { text: Number(c.weekFromEnd) === 1 ? 'Last week of the month' : Number(c.weekFromEnd) === 2 ? 'Second-last week' : c.weekFromEnd + ' weeks from the end' }))))),
+    el('p', { class: 'note', text: s.weekRule === 'sameWeek'
+      ? 'Both clubs use the same two weeks, so Fornham always meets the day after Great Barton.'
+      : 'Each club meets in its own last two weeks of the month, so no meeting falls after the month end.' }),
+    el('h3', { text: 'Breaks' }),
+    el('p', { text: (s.breakMonths || []).map(m => DateEngine.MONTH_LONG[m - 1]).join(', ') || 'None' }),
+    el('h3', { text: 'Presenters' }),
+    el('p', { text: s.presenters.length ? s.presenters.map(p => p.code + ' — ' + p.name + (p.active === false ? ' (inactive)' : '')).join(', ') : 'None yet' }));
+
+  const meta = state.plan.meta || {};
+  const about = el('section', { class: 'card' },
+    el('h2', { text: 'About this plan' }),
+    el('dl', { class: 'kv' },
+      el('dt', { text: 'Last saved' }), el('dd', { text: meta.savedAt ? new Date(meta.savedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—' }),
+      el('dt', { text: 'Saved by' }), el('dd', { text: meta.savedBy || '—' }),
+      el('dt', { text: 'Topics / sessions' }), el('dd', { text: Object.keys(state.plan.topics).length + ' / ' + Object.keys(state.plan.sessions).length }),
+      el('dt', { text: 'Repository' }), el('dd', {}, el('a', { href: 'https://github.com/' + REPO.owner + '/' + REPO.name, target: '_blank', rel: 'noopener noreferrer', text: REPO.owner + '/' + REPO.name }))));
+  box.replaceChildren(access, pattern, about);
+}
+
+/* --- The details panel ------------------------------------------------------------ */
+
+/** Open the details panel for one placed session. */
+function openDetails(sKey) {
+  const session = state.plan.sessions[sKey];
+  if (!session) return;
+  // Keep copies of the topic and session as they are now: saving compares
+  // against these, so a change made elsewhere meanwhile is never overwritten.
+  state.details = {
+    key: sKey,
+    topicId: session.topicId,
+    sessionBefore: clone(session),
+    topicBefore: clone(state.plan.topics[session.topicId] || null),
+    editing: canEdit()
+  };
+  showDetailsSheet();
+}
+
+/** Open the details of a topic from the tray (it may not be placed anywhere). */
+function openTopicDetails(topicId) {
+  const topic = state.plan.topics[topicId];
+  if (!topic) return;
+  state.details = { key: null, topicId, sessionBefore: null, topicBefore: clone(topic), editing: canEdit() };
+  showDetailsSheet();
+}
+
+function showDetailsSheet() {
+  renderDetails();
+  const sheet = document.getElementById('detailsSheet');
+  if (!sheet.open) sheet.showModal(); // showModal: blocks the board behind and lets Escape close it
+}
+
+function closeDetails() {
+  document.getElementById('detailsSheet').close();
+}
+
+/**
+ * Build the details panel, read-only or editable. With d.key it shows one placed
+ * session and its topic; without, just the topic (opened from the tray).
+ */
+function renderDetails() {
+  const d = state.details;
+  const sheet = document.getElementById('detailsSheet');
+  const session = d.key ? state.plan.sessions[d.key] : null;
+  const topic = state.plan.topics[d.topicId];
+  if ((d.key && !session) || !topic) { closeDetails(); return; }
+  const cat = categoryOf(topic.category) || categoryOf(session && session.category);
+  const club = session ? clubOf(session.club) : null;
+  const editing = d.editing && canEdit();
+
+  const head = el('div', { class: 'sheet-head', vars: colourVars(cat) },
+    el('div', { class: 'top' },
+      el('span', { class: 'cat-chip', text: cat.name }),
+      el('button', { type: 'button', class: 'btn btn-quiet btn-icon', attrs: { 'aria-label': 'Close' }, on: { click: closeDetails } }, icon('close'))),
+    editing
+      ? el('label', { class: 'field', attrs: { style: 'color:var(--ink-c)' } }, 'Topic title',
+          el('input', { class: 'input', id: 'fTitle', value: topic.title, maxLength: LIMITS.title, attrs: { style: 'font-size:20px;font-weight:700', required: true } }),
+          el('span', { class: 'error', id: 'eTitle' }))
+      : el('h2', { class: 'sheet-title', id: 'detailsTitle', text: topic.title }));
+
+  const body = el('div', { class: 'sheet-body' });
+  const placed = sessionsOfTopic(d.topicId);
+  const others = placed.filter(([k]) => k !== d.key);
+
+  if (editing) {
+    // Category: a topic placed in columns of one category may be that category or
+    // a club event. Placed in columns of different categories (such as the AGM in
+    // both Windows columns) it must stay a club event. Unplaced: any category.
+    const placedCats = new Set(placed.map(([, s]) => s.category));
+    const catOptions = placedCats.size > 1 ? [CLUB_EVENT]
+      : placedCats.size === 1 ? [[...placedCats][0], CLUB_EVENT]
+      : CATEGORY_ORDER.concat([CLUB_EVENT]);
+    const catSelect = el('select', { class: 'input', id: 'fCategory', disabled: catOptions.length === 1 },
+      catOptions.map(code => el('option', { value: code, text: categoryOf(code).name })));
+    catSelect.value = topic.category;
+
+    const active = settings().presenters.filter(p => p.active !== false || p.code === topic.presenter);
+    const presSelect = el('select', { class: 'input', id: 'fPresenter' },
+      el('option', { value: '', text: '— No presenter —' }),
+      active.map(p => el('option', { value: p.code, text: p.code + ' — ' + p.name })));
+    presSelect.value = topic.presenter || '';
+
+    appendAll(body,
+      el('div', { attrs: { style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px' } },
+        el('label', { class: 'field' }, 'Category', catSelect,
+          catOptions.length === 1 ? el('span', { class: 'help', text: 'Placed in more than one kind of group, so it stays a club event.' }) : null),
+        el('label', { class: 'field' }, 'Presenter', presSelect)),
+      // Nice to Have 2: one tick per topic, shown on every tile of the topic.
+      el('label', { class: 'check-row' },
+        el('input', { type: 'checkbox', id: 'fInvites', checked: !!topic.invitesSent }),
+        el('span', { text: 'Invitations sent to members' }),
+        topic.invitesSent && topic.invitesSentAt
+          ? el('span', { class: 'note', attrs: { style: 'font-weight:400' }, text: '(' + DateEngine.formatDayDate(topic.invitesSentAt.slice(0, 10), true) + ')' })
+          : null),
+      session ? renderSessionEditor(session) : null,
+      others.length ? el('p', { class: 'also' }, session ? 'Also placed at: ' : 'Placed at: ', alsoLinks(others))
+        : (!session ? el('p', { class: 'also', text: 'Not placed on the board yet.' }) : null),
+      el('section', { class: 'sheet-section' },
+        el('h3', { text: 'Tutorial materials' }),
+        el('label', { class: 'field' }, 'Tutorial notes (OneDrive link)',
+          el('input', { class: 'input', type: 'url', id: 'fNotes', value: topic.notesUrl || '', maxLength: LIMITS.url, placeholder: 'https://…' }),
+          el('span', { class: 'error', id: 'eNotes' })),
+        el('label', { class: 'field' }, 'Slides (optional)',
+          el('input', { class: 'input', type: 'url', id: 'fSlides', value: topic.slidesUrl || '', maxLength: LIMITS.url, placeholder: 'https://…' }),
+          el('span', { class: 'error', id: 'eSlides' })),
+        el('span', { class: 'help note', text: 'In OneDrive, share the file with “Anyone with the link can view” so members can open it.' })),
+      el('details', { class: 'briefing' },
+        el('summary', {}, 'Members’ briefing', icon('chevron')),
+        el('div', { class: 'inner' },
+          el('label', { class: 'visually-hidden', htmlFor: 'fBriefing', text: 'Briefing text' }),
+          el('textarea', { class: 'input', id: 'fBriefing', rows: 7, maxLength: LIMITS.briefing, value: topic.briefing || '' }))),
+      el('div', { class: 'danger-zone' },
+        session ? el('button', { type: 'button', class: 'btn', on: { click: () => removeSession(d.key) } }, icon('remove'), 'Remove from board') : null,
+        el('button', { type: 'button', class: 'btn btn-danger-text', on: { click: () => deleteTopic(d.topicId) } }, icon('trash'), 'Delete topic')));
+    if (session) body.querySelector('#fStatus').value = session.status || 'planned';
+  } else {
+    appendAll(body,
+      session ? el('section', { class: 'sheet-section' },
+        el('div', { class: 'session-box' },
+          el('div', { class: 'top' },
+            el('strong', { text: club ? club.name : session.club }),
+            el('span', { class: 'status-chip' + (session.status === 'cancelled' ? ' cancelled' : ''), text: session.status === 'cancelled' ? 'Cancelled' : 'Planned' })),
+          el('div', { text: groupName(session.club, session.category) }),
+          el('div', { attrs: { style: 'font-size:18px;font-weight:700' }, text: DateEngine.formatDayDate(session.date, true) + ', ' +
+            DateEngine.formatTime(session.start) + '–' + DateEngine.formatTime(session.end) }),
+          session.moved ? el('span', { class: 'chip chip-moved', attrs: { style: 'align-self:flex-start' }, text: 'Moved from the usual date or time' }) : null)) : null,
+      topic.presenter ? el('p', { attrs: { style: 'margin:0' } }, 'Presenter: ', el('strong', { text: presenterName(topic.presenter) })) : null,
+      topic.invitesSent ? el('span', { class: 'chip chip-invites', attrs: { style: 'align-self:flex-start;font-size:14px;padding:3px 8px' } }, icon('check'), 'Invitations sent to members') : null,
+      others.length ? el('p', { class: 'also' }, session ? 'Also at: ' : 'At: ', alsoLinks(others)) : null,
+      (topic.notesUrl || topic.slidesUrl) ? el('section', { class: 'sheet-section' },
+        el('h3', { text: 'Tutorial materials' }),
+        el('div', { class: 'actions', attrs: { style: 'display:flex;gap:8px;flex-wrap:wrap' } },
+          safeLink(topic.notesUrl, 'Open tutorial notes'),
+          safeLink(topic.slidesUrl, 'Open slides'))) : null,
+      topic.briefing ? el('details', { class: 'briefing' },
+        el('summary', {}, 'Members’ briefing', icon('chevron')),
+        el('div', { class: 'inner' }, el('p', { class: 'read', text: topic.briefing }))) : null);
+  }
+
+  const foot = el('div', { class: 'dlg-foot' }, el('div', { class: 'right' },
+    editing
+      ? [el('button', { type: 'button', class: 'btn', on: { click: closeDetails } }, 'Cancel'),
+         el('button', { type: 'button', class: 'btn btn-dark', id: 'detailsSave', on: { click: saveDetails } }, 'Save')]
+      : el('button', { type: 'button', class: 'btn', on: { click: closeDetails } }, 'Close')));
+  sheet.replaceChildren(head, body, foot);
+}
+
+/** The "This session" box: status, date and times of one placed session. */
+function renderSessionEditor(session) {
+  const p = DateEngine.parseMonth(session.month);
+  const dim = DateEngine.daysInMonth(p.year, p.month);
+  return el('section', { class: 'sheet-section' },
+    el('div', { attrs: { style: 'display:flex;align-items:baseline;justify-content:space-between;gap:8px' } },
+      el('h3', { text: 'This session' }),
+      el('button', { type: 'button', class: 'btn btn-quiet', attrs: { style: 'min-height:36px;color:var(--bronze-ink);text-decoration:underline' }, on: { click: resetToPattern } }, 'Reset to meeting pattern')),
+    el('div', { class: 'session-box' },
+      el('div', { class: 'top' },
+        el('strong', { text: groupName(session.club, session.category) }),
+        el('select', { class: 'input', id: 'fStatus', attrs: { 'aria-label': 'Status', style: 'min-height:36px' } },
+          el('option', { value: 'planned', text: 'Planned' }),
+          el('option', { value: 'cancelled', text: 'Cancelled' }))),
+      el('div', { class: 'row-fields' },
+        el('label', { class: 'field' }, 'Date',
+          el('input', { class: 'input', type: 'date', id: 'fDate', value: session.date,
+            min: session.month + '-01', max: session.month + '-' + String(dim).padStart(2, '0') })),
+        el('label', { class: 'field' }, 'Start', el('input', { class: 'input', type: 'time', id: 'fStart', value: session.start })),
+        el('label', { class: 'field' }, 'End', el('input', { class: 'input', type: 'time', id: 'fEnd', value: session.end }))),
+      el('span', { class: 'error', id: 'eSession' })));
+}
+
+/** Links to the other sessions showing the same topic. */
+function alsoLinks(others) {
+  return others.map(([k, s], i) => [i ? ', ' : '',
+    el('button', { type: 'button', text: groupName(s.club, s.category) + ' (' + DateEngine.formatDayDate(s.date) + ')', on: { click: () => openDetails(k) } })]);
+}
+
+/**
+ * A link that opens in a new tab, only if it is https.
+ * rel="noopener noreferrer" stops the opened page reaching back into this one
+ * and hides this page's address from it.
+ */
+function safeLink(url, text) {
+  if (!isSafeUrl(url)) return null;
+  return el('a', { class: 'btn btn-outline-bronze', href: url, target: '_blank', rel: 'noopener noreferrer' }, icon('open'), text);
+}
+function isSafeUrl(url) {
+  if (!url) return false;
+  try { return new URL(url).protocol === 'https:'; } catch (e) { return false; }
+}
+
+/** Put the date and times back to the meeting pattern for this cell. */
+function resetToPattern() {
+  const p = parseSessionKey(state.details.key);
+  const pattern = DateEngine.sessionDate(settings(), p.month, p.club, p.cat);
+  if (!pattern) { toast('The meeting pattern has no session for this group this month.'); return; }
+  document.getElementById('fDate').value = pattern.date;
+  document.getElementById('fStart').value = pattern.start;
+  document.getElementById('fEnd').value = pattern.end;
+}
+
+/** Show or clear an error under a field. */
+function fieldError(inputId, errorId, message) {
+  const input = document.getElementById(inputId);
+  if (input) input.setAttribute('aria-invalid', message ? 'true' : 'false');
+  const e = document.getElementById(errorId);
+  if (e) e.textContent = message || '';
+  return !message;
+}
+
+
+/* =====================================================================
+   8. INTERACTIONS
+   Header controls, the Edit switch and unlocking; selecting, placing,
+   moving, pairing, copy and paste, removing, deleting and undo; dragging
+   with mouse, finger or pencil; keyboard shortcuts; the details panel.
+
+   Every change to the plan goes through commit(): it records an undo entry
+   and queues the operations for saving (section 5). All the operations made by
+   one action share a "group", so they are saved, refused or undone together.
+   ===================================================================== */
+
+/* --- Which cells can take what -------------------------------------------------- */
+
+/**
+ * True when a topic may go in a cell: the cell's column is the topic's category
+ * (a club event may go in any column), and the meeting pattern gives the cell a
+ * date (so never in a break month).
+ */
+function topicFitsCell(topicId, key) {
+  const topic = state.plan.topics[topicId];
+  if (!topic) return false;
+  const p = parseSessionKey(key);
+  if (topic.category !== p.cat && topic.category !== CLUB_EVENT) return false;
+  return !!DateEngine.sessionDate(settings(), p.month, p.club, p.cat);
+}
+
+/**
+ * The cells to light for the current selection or drag, as a Set of cell keys.
+ * - A tile can move to any cell its topic fits. An occupied cell counts only if
+ *   the two tiles could swap, i.e. the other topic also fits this tile's cell.
+ * - A topic from the tray (or copied) can go in any cell it fits, except one
+ *   that already holds the same topic. An occupied cell means "replace".
+ * Only the months and columns on screen are considered.
+ */
+function currentTargets() {
+  const targets = new Set();
+  if (!canEdit()) return targets;
+  const source = state.drag && state.drag.active ? state.drag.source : state.pick;
+  if (!source) return targets;
+  const s = settings();
+  const cols = visibleColumns();
+  DateEngine.monthsBetween(state.range.from, state.range.to)
+    .filter(m => !DateEngine.isBreakMonth(s, m))
+    .forEach(month => cols.forEach(col => {
+      const key = sessionKey(month, col.club.code, col.cat.code);
+      const occupant = state.plan.sessions[key];
+      if (source.kind === 'tile') {
+        const moving = state.plan.sessions[source.key];
+        if (!moving || key === source.key || !topicFitsCell(moving.topicId, key)) return;
+        if (occupant && !topicFitsCell(occupant.topicId, source.key)) return;
+      } else {
+        if (!topicFitsCell(source.topicId, key)) return;
+        if (occupant && occupant.topicId === source.topicId) return;
+      }
+      targets.add(key);
+    }));
+  return targets;
+}
+
+/** Forget a selection whose tile or topic no longer exists (deleted here or elsewhere). */
+function tidySelection() {
+  if (!canEdit()) { state.pick = null; state.prompt = null; state.cursorKey = null; return; }
+  const pk = state.pick;
+  if (pk && pk.kind === 'tile' && !state.plan.sessions[pk.key]) state.pick = null;
+  if (pk && pk.kind === 'topic' && !state.plan.topics[pk.topicId]) state.pick = null;
+  if (state.clipboard && !state.plan.topics[state.clipboard]) state.clipboard = null;
+}
+
+/** Clear the selection, the empty-cell cursor and any pairing suggestion. */
+function clearPick() {
+  state.pick = null; state.cursorKey = null; state.prompt = null;
+  render();
+}
+
+/* --- Taps and clicks ------------------------------------------------------------- */
+
+/**
+ * A tap on a tile. View mode: open the details. Edit mode: if something else is
+ * selected and this cell is lit, act on it (swap or replace); a second tap on
+ * the selected tile opens its details; otherwise select this tile.
+ */
+function handleTileTap(key) {
+  if (!canEdit()) { openDetails(key); return; }
+  const pick = state.pick;
+  if (pick && pick.kind === 'tile' && pick.key === key) { openDetails(key); return; }
+  if (pick && currentTargets().has(key)) { performDrop(pick, key); return; }
+  state.pick = { kind: 'tile', key };
+  state.cursorKey = null; state.prompt = null;
+  render();
+}
+
+/** A tap on an empty cell (Edit mode): place the selection, or offer New topic / Paste here. */
+function handleCellTap(key) {
+  const pick = state.pick;
+  if (pick && currentTargets().has(key)) { performDrop(pick, key); return; }
+  if (pick) {
+    const topicId = pick.kind === 'tile' ? (state.plan.sessions[pick.key] || {}).topicId : pick.topicId;
+    toast(whyNotHere(topicId, key));
+  }
+  state.pick = null; state.prompt = null;
+  state.cursorKey = key;
+  render();
+}
+
+/** A tap on a topic in the tray: select it for placing; a second tap opens its details. */
+function handleTrayTap(topicId) {
+  const pick = state.pick;
+  if (pick && pick.kind === 'topic' && pick.topicId === topicId) { openTopicDetails(topicId); return; }
+  state.pick = { kind: 'topic', topicId, from: 'tray' };
+  state.cursorKey = null; state.prompt = null;
+  if (!trayDocked()) state.trayOverlay = false;  // get the sliding tray out of the way of the board
+  render();
+}
+
+/** A plain-English reason a topic cannot go in a cell. */
+function whyNotHere(topicId, key) {
+  const topic = state.plan.topics[topicId];
+  const p = parseSessionKey(key);
+  if (!topic) return 'That topic no longer exists.';
+  if (topic.category !== p.cat && topic.category !== CLUB_EVENT) {
+    return '“' + topic.title + '” is a ' + categoryOf(topic.category).name + ' topic, so it can only go in a ' + categoryOf(topic.category).name + ' column.';
+  }
+  if (!DateEngine.sessionDate(settings(), p.month, p.club, p.cat)) return 'There is no meeting in that cell.';
+  return 'That cell already holds this topic.';
+}
+
+/* --- Making changes -------------------------------------------------------------- */
+
+/** A short random id: 't_' + 8 letters and digits for topics, 'g…' for operation groups. */
+function randomId(prefix) {
+  // crypto.getRandomValues gives good random numbers in every modern browser.
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return prefix + Array.from(bytes, b => (b % 36).toString(36)).join('');
+}
+function newTopicId() {
+  let id;
+  do { id = randomId('t_'); } while (state.plan.topics[id]);
+  return id;
+}
+
+/** Record an action's operations as one undo step and queue them for saving. */
+function commit(ops, label) {
+  if (!ops.length) return;
+  const group = randomId('g');
+  ops.forEach(op => { op.group = group; if (!op.label) op.label = label; });
+  state.undo.push({ group, label, ops: clone(ops) });
+  if (state.undo.length > UNDO_LIMIT) state.undo.shift();
+  queueOps(ops);
+}
+
+/**
+ * Undo the last action. Each operation is reversed (its 'after' becomes the new
+ * 'before'), newest first. The reversal is tried on a copy of the plan first:
+ * if anything has changed since (for example on another device), nothing is
+ * undone and a message explains. The reversal is saved like any other change.
+ */
+function undoLast() {
+  const entry = state.undo.pop();
+  if (!entry) { toast('Nothing to undo.'); return; }
+  const group = randomId('g');
+  const label = 'Undo: ' + entry.label;
+  const inverse = entry.ops.slice().reverse().map(op => Object.assign(makeOp(op.kind, op.id, op.after, op.before, label), { group }));
+  const trial = clone(state.plan);
+  if (applyOps(trial, inverse, true)) {
+    addMessage('warn', 'Could not undo “' + entry.label + '”, because it has been changed since, perhaps on another device. The board shows the newer version.');
+    render();
+    return;
+  }
+  state.pick = null; state.prompt = null; state.cursorKey = null;
+  queueOps(inverse);
+  toast('Undone: ' + entry.label);
+}
+
+/** The session a topic gets when placed in a cell: date and times from the meeting pattern. */
+function newSession(topicId, key) {
+  const p = parseSessionKey(key);
+  const pattern = DateEngine.sessionDate(settings(), p.month, p.club, p.cat);
+  return {
+    topicId, club: p.club, category: p.cat, month: p.month,
+    date: pattern.date, start: pattern.start, end: pattern.end,
+    status: 'planned', moved: false,
+    updatedAt: new Date().toISOString(), updatedBy: state.account.login
+  };
+}
+
+/** Do whatever a drop (or a tap on a lit cell) means for this source and cell. */
+function performDrop(source, key) {
+  if (source.kind === 'tile') return moveSession(source.key, key);
+  return placeTopic(source.topicId, key, {});
+}
+
+/**
+ * Put a topic in a cell. An occupied cell asks first: the tile already there
+ * goes back to the tray (its topic is kept). Afterwards, suggest the same topic
+ * for the other club (pairing) unless told not to.
+ */
+async function placeTopic(topicId, key, options) {
+  const topic = state.plan.topics[topicId];
+  if (!topic || !topicFitsCell(topicId, key)) { toast(whyNotHere(topicId, key)); return; }
+  const occupant = state.plan.sessions[key];
+  if (occupant) {
+    const other = state.plan.topics[occupant.topicId] || { title: 'another topic' };
+    const answer = await ask('Replace “' + other.title + '”?',
+      describeSession(key) + ' already has “' + other.title + '”. Put “' + topic.title + '” there instead? “' +
+      other.title + '” goes back to the tray; nothing is deleted.',
+      [['cancel', 'Cancel'], ['replace', 'Replace', 'btn-dark']]);
+    if (answer !== 'replace') return;
+  }
+  const ses = newSession(topicId, key);
+  commit([makeOp('session', key, occupant || null, ses)],
+    'Place “' + topic.title + '” at ' + describeSession(key));
+  const wasCopy = state.pick && state.pick.kind === 'topic' && state.pick.from === 'copy';
+  state.pick = null; state.cursorKey = null; state.prompt = null;
+  if (!options.noPair) offerPairing(topicId, key);
+  render();
+  toast('Placed at ' + groupName(ses.club, ses.category) + ', ' + DateEngine.formatDayDate(ses.date) + (wasCopy ? '. Ctrl+V pastes it again.' : '.'));
+}
+
+/**
+ * Move a tile to another cell; the date and times come from the new cell's
+ * meeting pattern. Onto an occupied cell it asks whether to swap the two.
+ * Both halves of a move (or a swap) are one action, saved and undone together.
+ */
+async function moveSession(fromKey, toKey) {
+  const moving = state.plan.sessions[fromKey];
+  if (!moving) return;
+  const topic = state.plan.topics[moving.topicId] || { title: 'this topic' };
+  if (!topicFitsCell(moving.topicId, toKey)) { toast(whyNotHere(moving.topicId, toKey)); return; }
+  const occupant = state.plan.sessions[toKey];
+  let ops, label;
+  if (occupant) {
+    const other = state.plan.topics[occupant.topicId] || { title: 'another topic' };
+    if (!topicFitsCell(occupant.topicId, fromKey)) { toast('“' + other.title + '” cannot go in the cell “' + topic.title + '” is leaving, so they cannot swap.'); return; }
+    const answer = await ask('Swap the two topics?',
+      describeSession(toKey) + ' already has “' + other.title + '”. Swap it with “' + topic.title + '”?',
+      [['cancel', 'Cancel'], ['swap', 'Swap', 'btn-dark']]);
+    if (answer !== 'swap') return;
+    ops = [makeOp('session', fromKey, moving, newSession(occupant.topicId, fromKey)),
+           makeOp('session', toKey, occupant, newSession(moving.topicId, toKey))];
+    label = 'Swap “' + topic.title + '” and “' + other.title + '”';
+  } else {
+    ops = [makeOp('session', fromKey, moving, null), makeOp('session', toKey, null, newSession(moving.topicId, toKey))];
+    label = 'Move “' + topic.title + '” to ' + describeSession(toKey);
+  }
+  commit(ops, label);
+  state.pick = null; state.cursorKey = null; state.prompt = null;
+  if (!occupant) offerMovePartner(moving, fromKey, toKey);
+  render();
+  const now = state.plan.sessions[toKey];
+  toast((occupant ? 'Swapped. ' : 'Moved to ') + (occupant ? '' : DateEngine.formatDayDate(now.date) + '.') +
+    (moving.moved ? ' Its date and times now follow the meeting pattern.' : ''));
+}
+
+/**
+ * Pairing after placing: the clubs usually take the same topic in the same
+ * month, so suggest the matching cell at the other club, with its own date from
+ * the meeting pattern, if it is free and the topic is not already placed there.
+ */
+function offerPairing(topicId, key) {
+  const p = parseSessionKey(key);
+  const topic = state.plan.topics[topicId];
+  const placed = topicPlacement(topicId).byClub;
+  for (const club of settings().clubs) {
+    if (club.code === p.club) continue;
+    const otherKey = sessionKey(p.month, club.code, p.cat);
+    const pattern = DateEngine.sessionDate(settings(), p.month, club.code, p.cat);
+    if (!pattern || state.plan.sessions[otherKey]) continue;
+    if ((placed[club.code] || []).some(([, s]) => s.category === p.cat)) continue;
+    const when = DateEngine.formatDayDate(pattern.date);
+    state.prompt = {
+      text: ['Also place ', el('strong', { text: topic.title }), ' at ' + groupName(club.code, p.cat) + ' on ' + when + '?'],
+      button: 'Place on ' + when,
+      run: () => placeTopic(topicId, otherKey, { noPair: true })
+    };
+    return;
+  }
+}
+
+/**
+ * Pairing after moving: if the other club had the same topic in the same month
+ * and column, offer to move it to the matching cell of the new month too.
+ */
+function offerMovePartner(moving, fromKey, toKey) {
+  const from = parseSessionKey(fromKey), to = parseSessionKey(toKey);
+  const topic = state.plan.topics[moving.topicId];
+  for (const club of settings().clubs) {
+    if (club.code === from.club) continue;
+    const partnerKey = sessionKey(from.month, club.code, from.cat);
+    const partner = state.plan.sessions[partnerKey];
+    const targetKey = sessionKey(to.month, club.code, to.cat);
+    if (!partner || partner.topicId !== moving.topicId || partnerKey === targetKey) continue;
+    if (state.plan.sessions[targetKey] || !topicFitsCell(moving.topicId, targetKey)) continue;
+    const when = DateEngine.formatDayDate(DateEngine.sessionDate(settings(), to.month, club.code, to.cat).date);
+    state.prompt = {
+      text: ['Also move ' + club.code + '’s ', el('strong', { text: topic.title }), ' to ' + when + '?'],
+      button: 'Move ' + club.code + ' too',
+      run: () => moveSession(partnerKey, targetKey)
+    };
+    return;
+  }
+}
+
+/** Run the pairing suggestion shown in the strip. */
+function runPrompt() {
+  const prompt = state.prompt;
+  state.prompt = null;
+  if (prompt) prompt.run();
+}
+
+/** Copy a topic: it stays where it is, and lit cells show where it can be pasted. */
+function copyTopic(topicId) {
+  const topic = state.plan.topics[topicId];
+  if (!topic) return;
+  state.clipboard = topicId;
+  state.pick = { kind: 'topic', topicId, from: 'copy' };
+  state.cursorKey = null; state.prompt = null;
+  render();
+  toast('Copied “' + topic.title + '”. Tap a lit cell to paste it.');
+}
+
+/** Paste the copied topic into a cell. */
+function pasteInto(key) {
+  if (!state.clipboard || !state.plan.topics[state.clipboard]) { toast('Nothing copied yet. Select a tile and press Copy.'); return; }
+  if (!topicFitsCell(state.clipboard, key)) { toast(whyNotHere(state.clipboard, key)); return; }
+  placeTopic(state.clipboard, key, {});
+}
+
+/** Take a tile off the board. The topic stays in the tray for placing again. */
+function removeSession(key) {
+  const ses = state.plan.sessions[key];
+  if (!ses) return;
+  const topic = state.plan.topics[ses.topicId] || { title: 'topic' };
+  commit([makeOp('session', key, ses, null)], 'Remove “' + topic.title + '” from ' + describeSession(key));
+  state.pick = null; state.prompt = null;
+  if (state.details && state.details.key === key) closeDetails();
+  render();
+  toast('Removed from the board. The topic is still in the tray; Undo puts it back.');
+}
+
+/** Delete a topic and every tile showing it, after asking. */
+async function deleteTopic(topicId) {
+  const topic = state.plan.topics[topicId];
+  if (!topic) return;
+  const placed = sessionsOfTopic(topicId);
+  const answer = await ask('Delete “' + topic.title + '”?',
+    placed.length
+      ? 'This deletes the topic and removes its ' + placed.length + (placed.length === 1 ? ' tile' : ' tiles') + ' from the board (' +
+        placed.map(([k]) => describeSession(k)).join('; ') + '). Undo can bring it back.'
+      : 'This deletes the topic from the tray. Undo can bring it back.',
+    [['cancel', 'Cancel'], ['delete', 'Delete', 'btn-dark']]);
+  if (answer !== 'delete') return;
+  const ops = placed.map(([k, s]) => makeOp('session', k, s, null));
+  ops.push(makeOp('topic', topicId, topic, null));
+  commit(ops, 'Delete topic “' + topic.title + '”');
+  if (state.details && state.details.topicId === topicId) closeDetails();
+  state.pick = null; state.prompt = null;
+  if (state.clipboard === topicId) state.clipboard = null;
+  render();
+  toast('Deleted “' + topic.title + '”.');
+}
+
+/* --- New topic ----------------------------------------------------------------- */
+
+/**
+ * Open the New topic dialog. From an empty cell, the category is that column's
+ * (or Club event) and "Place it here" is ticked.
+ */
+function openNewTopic(cellKey) {
+  const dlg = document.getElementById('topicDialog');
+  const catSel = document.getElementById('ntCategory');
+  const cell = cellKey ? parseSessionKey(cellKey) : null;
+  const codes = cell ? [cell.cat, CLUB_EVENT] : CATEGORY_ORDER.concat([CLUB_EVENT]);
+  catSel.replaceChildren(...codes.map(code => el('option', { value: code, text: categoryOf(code).name })));
+  if (!cell && state.platform !== 'all') {
+    const first = settings().categories.find(c => c.platform === state.platform);
+    if (first) catSel.value = first.code;
+  }
+  const presSel = document.getElementById('ntPresenter');
+  presSel.replaceChildren(el('option', { value: '', text: '— No presenter —' }),
+    ...settings().presenters.filter(p => p.active !== false).map(p => el('option', { value: p.code, text: p.code + ' — ' + p.name })));
+  document.getElementById('ntTitle').value = '';
+  fieldError('ntTitle', 'ntTitleError', '');
+  const row = document.getElementById('ntPlaceRow');
+  row.hidden = !cell;
+  document.getElementById('ntPlace').checked = true;
+  if (cell) {
+    const pattern = DateEngine.sessionDate(settings(), cell.month, cell.club, cell.cat);
+    document.getElementById('ntPlaceText').textContent = 'Place it at ' + groupName(cell.club, cell.cat) + ', ' + DateEngine.formatDayDate(pattern.date);
+  }
+  dlg.dataset.cell = cellKey || '';
+  dlg.showModal();
+  setTimeout(() => document.getElementById('ntTitle').focus(), 50);
+}
+
+/** "Create topic": add it to the tray, and place it if asked. */
+function confirmNewTopic() {
+  const dlg = document.getElementById('topicDialog');
+  const title = document.getElementById('ntTitle').value.trim();
+  if (!fieldError('ntTitle', 'ntTitleError', title ? '' : 'Please give the topic a title.')) return;
+  const id = newTopicId();
+  const topic = {
+    title, category: document.getElementById('ntCategory').value,
+    presenter: document.getElementById('ntPresenter').value,
+    notesUrl: '', slidesUrl: '', briefing: '', invitesSent: false,
+    updatedAt: new Date().toISOString(), updatedBy: state.account.login
+  };
+  const cellKey = dlg.dataset.cell;
+  const place = !!cellKey && document.getElementById('ntPlace').checked && !state.plan.sessions[cellKey];
+  const ops = [makeOp('topic', id, null, topic)];
+  dlg.close();
+  if (place) {
+    // The topic must exist before newSession/topicFitsCell look at it, so add it to
+    // the on-screen plan's copy first: queueOps rebuilds the plan from the ops anyway.
+    state.plan.topics[id] = topic;
+    ops.push(makeOp('session', cellKey, null, newSession(id, cellKey)));
+  }
+  commit(ops, 'New topic “' + title + '”' + (place ? ' at ' + describeSession(cellKey) : ''));
+  state.cursorKey = null; state.prompt = null;
+  if (place) {
+    state.pick = null;
+    offerPairing(id, cellKey);
+    toast('Created and placed.');
+  } else {
+    // Select the new topic so the lit cells show where it can go.
+    state.pick = { kind: 'topic', topicId: id, from: 'tray' };
+    toast('Created. Tap a lit cell to place it, or drag it from the tray.');
+  }
+  render();
+}
+
+/* --- A question with buttons ---------------------------------------------------- */
+
+/**
+ * Show a question in a dialog and resolve with the value of the button pressed
+ * ('cancel' if closed with Escape). buttons: [[value, label, extraClass], …].
+ * A <dialog> opened with showModal() keeps focus inside it until it closes.
+ */
+function ask(title, text, buttons) {
+  return new Promise(resolve => {
+    const dlg = document.getElementById('askDialog');
+    document.getElementById('askTitle').textContent = title;
+    document.getElementById('askText').textContent = text;
+    document.getElementById('askButtons').replaceChildren(...buttons.map(([value, label, cls]) =>
+      el('button', { type: 'button', class: 'btn ' + (cls || ''), text: label, on: { click: () => dlg.close(value) } })));
+    dlg.returnValue = 'cancel';
+    dlg.addEventListener('close', () => resolve(dlg.returnValue || 'cancel'), { once: true });
+    dlg.showModal();
+    // Focus the last (main) button so Enter confirms.
+    const btns = dlg.querySelectorAll('#askButtons button');
+    if (btns.length) btns[btns.length - 1].focus();
+  });
+}
+
+/* --- The tray button ------------------------------------------------------------ */
+function toggleTray() {
+  if (trayDocked()) { state.trayOpen = !state.trayOpen; savePrefs(); }
+  else state.trayOverlay = !state.trayOverlay;
+  render();
+}
+
+/* --- Dragging ----------------------------------------------------------------------
+   Written once with Pointer Events, which report mouse, finger and Apple Pencil
+   alike (e.pointerType says which). The browser's own drag-and-drop is not used:
+   it does not work reliably on the iPad.
+   1. pointerdown on a tile or tray card records a *possible* drag.
+   2. Mouse: it becomes a drag once the pointer moves a few pixels.
+      Finger or pencil: it becomes a drag after a 300 ms press-and-hold; moving
+      further than a few pixels before that means the person is scrolling, so
+      the possible drag is dropped and the browser scrolls as usual.
+   3. While dragging, a "ghost" copy follows the pointer, valid cells are lit,
+      the cell underneath is highlighted, and near the board's edges the board
+      scrolls. touchmove is cancelled so the iPad does not scroll the page too.
+   4. On release over a lit cell the drop is carried out (move, swap, place).
+      Dropping a tile on the tray takes it off the board.
+   The page is not redrawn mid-drag (see render): on the iPad, removing the
+   element a finger started on stops its touch events arriving.                  */
+
+let suppressClickUntil = 0;   // a drag ends with a click event; this swallows it
+
+function onPointerDown(e) {
+  if (!canEdit() || state.drag) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;   // left button only
+  const handle = e.target.closest('[data-drag]');
+  if (!handle) return;
+  const source = handle.dataset.drag === 'tile'
+    ? { kind: 'tile', key: handle.closest('[data-key]').dataset.key }
+    : { kind: 'topic', topicId: handle.dataset.topic };
+  const rect = handle.getBoundingClientRect();
+  state.drag = {
+    source, handle, pointerId: e.pointerId, pointerType: e.pointerType,
+    startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY,
+    offsetX: Math.min(e.clientX - rect.left, 170), offsetY: e.clientY - rect.top,
+    width: Math.min(rect.width, 220),
+    active: false, overKey: null, overTray: false, holdTimer: null, frame: null, renderLater: false
+  };
+  if (e.pointerType !== 'mouse') {
+    state.drag.holdTimer = setTimeout(() => { if (state.drag && !state.drag.active) startDrag(); }, DRAG.holdDelay);
+  }
+}
+
+function onPointerMove(e) {
+  const d = state.drag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  d.x = e.clientX; d.y = e.clientY;
+  const dist = Math.hypot(d.x - d.startX, d.y - d.startY);
+  if (!d.active) {
+    if (d.pointerType === 'mouse') { if (dist > DRAG.mouseThreshold) startDrag(); }
+    else if (dist > DRAG.holdSlop) abandonDrag();          // a swipe: let the board scroll
+    return;
+  }
+  e.preventDefault();
+  positionGhost();
+  updateHover();
+}
+
+function onPointerUp(e) {
+  const d = state.drag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  if (!d.active) { abandonDrag(); return; }               // a plain tap: the click handler deals with it
+  finishDrag(false);
+}
+
+/** The hold or the movement threshold was reached: lift the tile. */
+function startDrag() {
+  const d = state.drag;
+  clearTimeout(d.holdTimer);
+  d.active = true;
+  state.pick = null; state.cursorKey = null; state.prompt = null;
+  // Grabbing from the sliding tray: hide the tray so the board is free to drop on.
+  const tray = document.getElementById('tray');
+  d.fromOverlay = d.source.kind === 'topic' && tray.classList.contains('overlay');
+  if (d.fromOverlay) tray.hidden = true;
+  d.handle.classList.add('is-drag-source');
+  document.getElementById('strip').hidden = true;
+  // The ghost: a copy of what is being dragged, inside a box that ignores the
+  // pointer (pointer-events: none) so elementFromPoint finds the cell beneath.
+  const ghost = el('div', { class: 'drag-ghost', attrs: { 'aria-hidden': 'true' } });
+  const copy = d.handle.cloneNode(true);
+  copy.classList.remove('is-drag-source', 'is-selected');
+  ghost.append(copy);
+  ghost.style.width = d.width + 'px';
+  document.body.append(ghost);
+  d.ghost = ghost;
+  document.body.classList.add('is-dragging');
+  // A short buzz on devices that support it (not iPad Safari), so a finger feels the lift.
+  if (d.pointerType !== 'mouse' && navigator.vibrate) navigator.vibrate(15);
+  lightTargets();
+  positionGhost();
+  updateHover();
+  d.frame = requestAnimationFrame(autoScroll);
+}
+
+/** Light the valid cells in place (no redraw: see the note above). */
+function lightTargets() {
+  const targets = currentTargets();
+  document.querySelectorAll('#board .cell[data-key]').forEach(cell => {
+    const lit = targets.has(cell.dataset.key);
+    cell.classList.toggle('lit', lit);
+    cell.classList.toggle('occupied', lit && !!state.plan.sessions[cell.dataset.key]);
+    cell.classList.remove('is-cursor');
+  });
+  state.drag.targets = targets;
+}
+
+function positionGhost() {
+  const d = state.drag;
+  // translate3d is drawn by the graphics chip, so the ghost follows smoothly.
+  d.ghost.style.transform = 'translate3d(' + (d.x - d.offsetX) + 'px,' + (d.y - d.offsetY) + 'px,0) rotate(-2deg)';
+}
+
+/** Highlight the cell under the pointer: bronze if it can take the drop, red if not. */
+function updateHover() {
+  const d = state.drag;
+  const under = document.elementFromPoint(d.x, d.y);
+  const cell = under && under.closest('#board .cell[data-key]');
+  const key = cell ? cell.dataset.key : null;
+  const overTray = !!(under && under.closest('#tray')) && d.source.kind === 'tile' && !document.getElementById('tray').hidden;
+  if (key !== d.overKey || overTray !== d.overTray) {
+    document.querySelectorAll('.drop-hover, .drop-refused').forEach(c => c.classList.remove('drop-hover', 'drop-refused'));
+    if (cell && !(d.source.kind === 'tile' && key === d.source.key)) {
+      cell.classList.add(d.targets.has(key) ? 'drop-hover' : 'drop-refused');
+    }
+    document.getElementById('tray').classList.toggle('drop-hover', overTray);
+    d.overKey = key; d.overTray = overTray;
+  }
+}
+
+/** Scroll the board while the pointer is near its edges, each animation frame. */
+function autoScroll() {
+  const d = state.drag;
+  if (!d || !d.active) return;
+  const box = document.getElementById('gridScroll');
+  const r = box.getBoundingClientRect();
+  const speed = dist => dist < DRAG.edgeZone ? Math.ceil(DRAG.edgeSpeed * (1 - Math.max(dist, 0) / DRAG.edgeZone)) : 0;
+  const dy = speed(d.y - r.top) ? -speed(d.y - r.top) : speed(r.bottom - d.y);
+  const dx = speed(d.x - r.left) ? -speed(d.x - r.left) : speed(r.right - d.x);
+  if (dx || dy) { box.scrollBy(dx, dy); updateHover(); }
+  d.frame = requestAnimationFrame(autoScroll);
+}
+
+/** Release: carry out the drop if the cell is lit, then tidy up. */
+function finishDrag(cancelled) {
+  const d = state.drag;
+  const key = d.overKey, overTray = d.overTray, source = d.source;
+  const valid = !cancelled && key && d.targets.has(key);
+  const refusedHere = !cancelled && key && !valid && !(source.kind === 'tile' && key === source.key);
+  cleanUpDrag();
+  suppressClickUntil = Date.now() + 250;
+  render();   // catch up on anything that changed during the drag, and clear the lit cells
+  if (valid) { performDrop(source, key); return; }
+  if (!cancelled && overTray && source.kind === 'tile') { removeSession(source.key); return; }
+  if (refusedHere) {
+    const topicId = source.kind === 'tile' ? (state.plan.sessions[source.key] || {}).topicId : source.topicId;
+    toast(whyNotHere(topicId, key));
+  }
+}
+
+function cleanUpDrag() {
+  const d = state.drag;
+  clearTimeout(d.holdTimer);
+  cancelAnimationFrame(d.frame);
+  if (d.ghost) d.ghost.remove();
+  if (d.handle) d.handle.classList.remove('is-drag-source');
+  document.body.classList.remove('is-dragging');
+  document.querySelectorAll('.drop-hover, .drop-refused').forEach(c => c.classList.remove('drop-hover', 'drop-refused'));
+  state.drag = null;
+}
+
+/** A possible drag that never started (a tap, or a swipe to scroll). */
+function abandonDrag() {
+  const d = state.drag;
+  if (!d) return;
+  clearTimeout(d.holdTimer);
+  state.drag = null;
+}
+
+/* --- Keyboard shortcuts (PC) ------------------------------------------------------ */
+
+/** The cell key of the focused element, if it is inside a cell. */
+function focusedCellKey() {
+  const cell = document.activeElement && document.activeElement.closest && document.activeElement.closest('#board .cell[data-key]');
+  return cell ? cell.dataset.key : null;
+}
+
+/**
+ * Ctrl+Z undo, Ctrl+C copy, Ctrl+V paste, Delete remove, Escape cancel.
+ * (Cmd on a Mac or an iPad keyboard.) Ignored while typing in a box or with a
+ * dialog open, so they never interfere with ordinary text editing.
+ */
+function onKeyDown(e) {
+  if (!canEdit() || state.view !== 'board') return;
+  if (document.querySelector('dialog[open]')) return;
+  const t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  const mod = e.ctrlKey || e.metaKey;
+  const k = e.key.toLowerCase();
+  const pick = state.pick;
+  const focusedKey = focusedCellKey();
+  if (mod && k === 'z' && !e.shiftKey) { e.preventDefault(); undoLast(); return; }
+  if (mod && k === 'c') {
+    const tileKey = pick && pick.kind === 'tile' ? pick.key : (focusedKey && state.plan.sessions[focusedKey] ? focusedKey : null);
+    const topicId = tileKey ? state.plan.sessions[tileKey].topicId : (pick && pick.kind === 'topic' ? pick.topicId : null);
+    if (topicId) { e.preventDefault(); copyTopic(topicId); }
+    return;
+  }
+  if (mod && k === 'v') {
+    const key = focusedKey || state.cursorKey;
+    if (key) { e.preventDefault(); pasteInto(key); }
+    else if (state.clipboard) toast('Click the cell to paste into, then press Ctrl+V.');
+    return;
+  }
+  if (!mod && (e.key === 'Delete' || e.key === 'Backspace')) {
+    if (pick && pick.kind === 'tile') { e.preventDefault(); removeSession(pick.key); }
+    else if (pick && pick.kind === 'topic' && pick.from === 'tray') { e.preventDefault(); deleteTopic(pick.topicId); }
+    else if (focusedKey && state.plan.sessions[focusedKey]) { e.preventDefault(); removeSession(focusedKey); }
+    return;
+  }
+  if (e.key === 'Escape' && (pick || state.cursorKey || state.prompt)) { e.preventDefault(); clearPick(); }
+}
+
+/* --- The details panel ---------------------------------------------------------- */
+
+/** Check the details form and queue the changes as operations. */
+function saveDetails() {
+  const d = state.details;
+  const val = id => document.getElementById(id).value;
+  const title = val('fTitle').trim();
+  const notesUrl = val('fNotes').trim();
+  const slidesUrl = val('fSlides').trim();
+
+  let ok = true;
+  ok = fieldError('fTitle', 'eTitle', !title ? 'Please give the topic a title.' : '') && ok;
+  ok = fieldError('fNotes', 'eNotes', notesUrl && !isSafeUrl(notesUrl) ? 'Links must start with https://' : '') && ok;
+  ok = fieldError('fSlides', 'eSlides', slidesUrl && !isSafeUrl(slidesUrl) ? 'Links must start with https://' : '') && ok;
+  let date, start, end, p;
+  if (d.key) {
+    // Only a placed session has a date and times to check.
+    date = val('fDate'); start = val('fStart'); end = val('fEnd');
+    p = parseSessionKey(d.key);
+    let sessionProblem = '';
+    const pd = DateEngine.parseDate(date);
+    if (!pd || DateEngine.monthKey(pd.year, pd.month) !== p.month) sessionProblem = 'The date must be in ' + DateEngine.formatMonth(p.month) + '.';
+    else if (!DateEngine.isTime(start) || !DateEngine.isTime(end)) sessionProblem = 'Please enter a start and end time.';
+    else if (end <= start) sessionProblem = 'The end time must be after the start time.';
+    ok = fieldError('fDate', 'eSession', sessionProblem) && ok;
+  }
+  if (!ok) return;
+
+  const who = state.account.login;
+  const stamp = new Date().toISOString();
+  const ops = [];
+
+  // Topic: compare the editable fields with the copy taken when the panel opened.
+  const tBefore = d.topicBefore || {};
+  const invites = document.getElementById('fInvites').checked;
+  const tAfter = Object.assign({}, tBefore, {
+    title,
+    category: val('fCategory'),
+    presenter: val('fPresenter'),
+    notesUrl, slidesUrl,
+    briefing: val('fBriefing').replace(/\r\n/g, '\n').trimEnd(),
+    invitesSent: invites,
+    // Remember when the tick was first set; clearing the tick clears the date.
+    invitesSentAt: invites ? (tBefore.invitesSent ? (tBefore.invitesSentAt || stamp) : stamp) : ''
+  });
+  const topicFields = ['title', 'category', 'presenter', 'notesUrl', 'slidesUrl', 'briefing', 'invitesSent'];
+  if (topicFields.some(f => (tBefore[f] || '') !== (tAfter[f] || ''))) {
+    tAfter.updatedAt = stamp; tAfter.updatedBy = who;
+    ops.push(makeOp('topic', d.topicId, d.topicBefore, tAfter));
+  }
+
+  // Session: 'moved' is true whenever the date or times differ from the meeting pattern.
+  if (d.key) {
+    const sBefore = d.sessionBefore;
+    const pattern = DateEngine.sessionDate(settings(), p.month, p.club, p.cat);
+    const sAfter = Object.assign({}, sBefore, {
+      date, start, end,
+      status: val('fStatus'),
+      moved: !pattern || pattern.date !== date || pattern.start !== start || pattern.end !== end
+    });
+    if (['date', 'start', 'end', 'status', 'moved'].some(f => sBefore[f] !== sAfter[f])) {
+      sAfter.updatedAt = stamp; sAfter.updatedBy = who;
+      ops.push(makeOp('session', d.key, sBefore, sAfter));
+    }
+  }
+
+  closeDetails();
+  if (!ops.length) return;
+  const onlyInvites = ops.length === 1 && ops[0].kind === 'topic' &&
+    topicFields.filter(f => (tBefore[f] || '') !== (tAfter[f] || '')).join() === 'invitesSent';
+  const label = onlyInvites ? (invites ? 'Tick' : 'Untick') + ' invitations sent for “' + title + '”'
+    : ops.some(o => o.kind === 'session') && ops.length === 1 ? 'Change ' + describeSession(d.key) + ' session'
+    : 'Edit topic “' + title + '”';
+  commit(ops, label);
+  toast('Saved on this device — sending to GitHub…');
+}
+
+/* --- Unlocking ---------------------------------------------------------------- */
+function openUnlockDialog(lapsed, reason) {
+  document.getElementById('unlockLapsed').hidden = !lapsed;
+  document.getElementById('keyError').textContent = reason && !/did not accept/.test(reason) ? reason : '';
+  document.getElementById('keyInput').value = '';
+  const dlg = document.getElementById('unlockDialog');
+  if (!dlg.open) dlg.showModal();
+  setTimeout(() => document.getElementById('keyInput').focus(), 50);
+}
+
+/** Try the pasted key; on success remember it and switch to editing. */
+async function confirmUnlock() {
+  const input = document.getElementById('keyInput');
+  const errorBox = document.getElementById('keyError');
+  const key = input.value.trim();
+  if (!key) { errorBox.textContent = 'Please paste your access key.'; return; }
+  if (/\s/.test(key)) { errorBox.textContent = 'The key should have no spaces. Copy it again from GitHub.'; return; }
+  const button = document.getElementById('unlockConfirm');
+  button.disabled = true; button.textContent = 'Checking…'; errorBox.textContent = '';
+  const previousKey = state.key;
+  state.key = key;
+  try {
+    const account = await verifyKey();
+    if (!account.canWrite) throw new KeyError('This GitHub account can read the planner but not save to it.');
+    const latest = await fetchPlanFromApi(null);
+    const problems = validatePlan(latest.data);
+    if (problems.length) throw new Error(problems.join(' '));
+    storeSet(STORE.key, key);
+    state.account = account;
+    state.remote = { sha: latest.sha, etag: latest.etag, data: withDefaults(latest.data) };
+    state.lastLoaded = new Date();
+    state.mode = 'edit';
+    document.getElementById('unlockDialog').close();
+    rebuildLocalPlan();
+    if (state.pending.length) scheduleSave(0); else setSaveStatus('saved');
+    toast('Unlocked as ' + account.login + '. Editing is on.');
+    startPolling();
+  } catch (err) {
+    state.key = previousKey;
+    // fetch() throws a TypeError when the network itself fails; anything else carries its own message.
+    errorBox.textContent = err instanceof TypeError
+      ? 'Could not reach GitHub. Check the internet connection and try again.'
+      : err.message;
+  } finally {
+    button.disabled = false; button.textContent = 'Unlock';
+  }
+}
+
+/** "Remove key from this device": back to a reader's view. */
+function removeKey() {
+  if (state.pending.length && !confirm('Some changes have not been saved yet and will be lost. Remove the key anyway?')) return;
+  if (!state.pending.length && !confirm('Remove the editing key from this device? You will need to paste it again to edit here.')) return;
+  storeRemove(STORE.key);
+  state.key = null; state.account = null; state.mode = 'view'; state.pending = []; state.undo = [];
+  render();
+  setSaveStatus('reader');
+  toast('Key removed. This device is now view-only.');
+  startPolling();
+}
+
+/* --- Messages and toasts --------------------------------------------------------- */
+/** A message that stays until dismissed. tone: 'info', 'warn' or 'bad'. */
+function addMessage(tone, text) {
+  const box = el('div', { class: 'message', attrs: { 'data-tone': tone } },
+    el('div', { class: 'message-text', text }),
+    el('button', { type: 'button', class: 'btn', on: { click: () => box.remove() } }, 'Dismiss'));
+  document.getElementById('messages').append(box);
+}
+let toastTimer = null;
+function toast(text) {
+  const t = document.getElementById('toast');
+  t.textContent = text;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+/* --- Range of months shown ---------------------------------------------------- */
+function setRange(from, to) {
+  state.range = { from, to };
+  render();
+}
+function shiftRange(months) {
+  const options = selectableMonths();
+  let from = DateEngine.addMonths(state.range.from, months);
+  let to = DateEngine.addMonths(state.range.to, months);
+  if (from < options[0]) { to = DateEngine.addMonths(to, DateEngine.monthsBetween(from, options[0]).length - 1); from = options[0]; }
+  if (to > options[options.length - 1]) to = options[options.length - 1];
+  setRange(from, to);
+}
+function openRangeDialog() {
+  const months = selectableMonths();
+  ['rangeFrom', 'rangeTo'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.replaceChildren(...months.map(m => el('option', { value: m, text: DateEngine.formatMonth(m, true) })));
+  });
+  document.getElementById('rangeFrom').value = state.range.from;
+  document.getElementById('rangeTo').value = state.range.to;
+  document.getElementById('rangeError').textContent = '';
+  document.getElementById('rangeDialog').showModal();
+}
+/** "This month": bring the current month into view, and scroll to it. */
+function goToThisMonth() {
+  const now = today().month;
+  if (now < state.range.from || now > state.range.to) setRange(now, DateEngine.addMonths(now, 11));
+  const row = document.querySelector('.row[data-month="' + now + '"] .mcell');
+  const scroller = document.getElementById('gridScroll');
+  if (row) scroller.scrollTo({ top: row.offsetTop - scroller.querySelector('.sub').offsetHeight - scroller.querySelector('.band').offsetHeight, behavior: 'smooth' });
+  else scroller.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/** Wire up every fixed control once. */
+function bindControls() {
+  document.querySelectorAll('[data-icon]').forEach(span => { span.innerHTML = ICONS[span.dataset.icon]; });
+  document.querySelectorAll('.views button').forEach(b => b.addEventListener('click', () => { state.view = b.dataset.view; render(); }));
+  document.querySelectorAll('#platformFilter button').forEach(b => b.addEventListener('click', () => {
+    state.platform = b.dataset.platform; savePrefs(); render();
+  }));
+  document.getElementById('groupBySelect').addEventListener('change', e => { state.groupBy = e.target.value; savePrefs(); render(); });
+  document.getElementById('rangeEarlier').addEventListener('click', () => shiftRange(-3));
+  document.getElementById('rangeLater').addEventListener('click', () => shiftRange(3));
+  document.getElementById('rangeLabel').addEventListener('click', openRangeDialog);
+  document.getElementById('rangeApply').addEventListener('click', () => {
+    const from = document.getElementById('rangeFrom').value, to = document.getElementById('rangeTo').value;
+    if (to < from) { document.getElementById('rangeError').textContent = '“To” must be the same as or after “From”.'; return; }
+    document.getElementById('rangeDialog').close();
+    setRange(from, to);
+  });
+  document.getElementById('thisMonthBtn').addEventListener('click', goToThisMonth);
+  document.getElementById('refreshBtn').addEventListener('click', () => refreshPlan(true));
+  document.getElementById('unlockBtn').addEventListener('click', () => openUnlockDialog(false));
+  document.getElementById('unlockConfirm').addEventListener('click', confirmUnlock);
+  document.getElementById('keyInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); confirmUnlock(); } });
+  document.getElementById('guideLink').href = GUIDE_URL;
+  document.getElementById('editSwitch').addEventListener('click', () => {
+    state.mode = state.mode === 'edit' ? 'view' : 'edit';
+    if (state.mode === 'view') { state.pick = null; state.cursorKey = null; state.prompt = null; state.trayOverlay = false; }
+    render();
+    toast(state.mode === 'edit' ? 'Editing is on. Tap a tile to select it, or drag it.' : 'Editing is off.');
+  });
+
+  // --- Stage 2: editing the board ---
+  document.getElementById('undoBtn').addEventListener('click', undoLast);
+  document.getElementById('trayBtn').addEventListener('click', toggleTray);
+  document.getElementById('newTopicBtn').addEventListener('click', () => openNewTopic(state.cursorKey && !state.plan.sessions[state.cursorKey] ? state.cursorKey : null));
+  document.getElementById('ntCreate').addEventListener('click', confirmNewTopic);
+  document.getElementById('ntTitle').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); confirmNewTopic(); } });
+  // Dragging: listen on the whole document so the drag carries on wherever the
+  // pointer goes. pointermove is registered with passive: false so that, once a
+  // drag has started, preventDefault() can stop the browser acting on the move.
+  document.addEventListener('pointerdown', onPointerDown);
+  document.addEventListener('pointermove', onPointerMove, { passive: false });
+  document.addEventListener('pointerup', onPointerUp);
+  // pointercancel: the browser took the pointer over (for example it began to
+  // scroll) or the system interrupted; drop the drag without doing anything.
+  document.addEventListener('pointercancel', () => { if (state.drag) { if (state.drag.active) finishDrag(true); else abandonDrag(); } });
+  // On the iPad, a finger moving during a drag would also scroll the board.
+  // Cancelling touchmove (only while a drag is active) stops that. passive: false
+  // is required, or Safari ignores preventDefault here.
+  document.addEventListener('touchmove', e => { if (state.drag && state.drag.active) e.preventDefault(); }, { passive: false });
+  // A long press can open a context menu (Windows touch screens, some browsers);
+  // in Edit mode a long press on a tile means "drag", so suppress the menu there.
+  document.addEventListener('contextmenu', e => { if (canEdit() && e.target.closest('[data-drag]')) e.preventDefault(); });
+  // Swallow the click that some browsers send at the end of a drag (registered
+  // in the capture phase, so it runs before the tile's own click handler).
+  // Only clicks on the board or tray are swallowed, so a quick press of a strip
+  // or dialog button straight after a drop still works.
+  document.addEventListener('click', e => {
+    if (Date.now() < suppressClickUntil && e.target.closest && e.target.closest('#board, #tray')) {
+      e.stopPropagation(); e.preventDefault();
+    }
+  }, true);
+  document.addEventListener('keydown', onKeyDown);
+  // The tray docks or slides depending on the window width; redraw it when that changes.
+  let resizeTimer = null;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (!state.drag) render(); }, 150); });
+  // Clicking the dim backdrop around the details sheet closes it (a click on the
+  // backdrop reports the <dialog> itself as its target).
+  document.getElementById('detailsSheet').addEventListener('click', e => { if (e.target.id === 'detailsSheet') closeDetails(); });
+  document.getElementById('detailsSheet').addEventListener('close', () => { state.details = null; });
+  // "Leave site?" warning while changes are still unsaved. Browsers show their own
+  // wording; setting returnValue is what asks them to show it.
+  window.addEventListener('beforeunload', e => {
+    if (state.pending.length || state.saving) { e.preventDefault(); e.returnValue = ''; }
+  });
+  // When the page comes back into view (for example the iPad wakes), check for news.
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshPlan(false); });
+}
+
+
+/* =====================================================================
+   9. PDFs — built in Stage 4 (jsPDF and AutoTable from the vendor folder).
+   10. BACKUP AND RESTORE — built in Stage 4.
+   ===================================================================== */
+
+
+/* =====================================================================
+   11. START-UP
+   Read the plan, check for a saved key, draw the board, keep it fresh.
+   ===================================================================== */
+
+/**
+ * Fetch the newest plan. Editors ask GitHub's API (cheaply: an unchanged file
+ * costs nothing); readers reload the published copy. Skipped while saving or
+ * while changes are queued, because runSave already deals with newer copies.
+ */
+async function refreshPlan(byHand) {
+  if (!state.plan || state.saving || state.pending.length || state.drag) return;
+  try {
+    if (state.account) {
+      const latest = await fetchPlanFromApi(state.remote.etag);
+      if (latest.unchanged) { if (byHand) toast('Already up to date.'); return; }
+      if (validatePlan(latest.data).length) throw new Error('The plan file on GitHub looks damaged.');
+      const changed = latest.sha !== state.remote.sha;
+      state.remote = { sha: latest.sha, etag: latest.etag, data: withDefaults(latest.data) };
+      state.lastLoaded = new Date();
+      if (changed) { rebuildLocalPlan(); toast('Updated with changes saved on another device.'); }
+      else if (byHand) toast('Already up to date.');
+    } else {
+      const data = await loadPublishedPlan();
+      if (validatePlan(data).length) throw new Error('The plan file looks damaged.');
+      const changed = stableJson(data) !== stableJson(state.remote.data);
+      state.remote = { sha: null, etag: null, data: withDefaults(data) };
+      state.lastLoaded = new Date();
+      state.plan = clone(state.remote.data);
+      render();
+      setSaveStatus('reader');
+      if (byHand) toast(changed ? 'Updated.' : 'Already up to date.');
+    }
+  } catch (err) {
+    if (err instanceof KeyError) { handleKeyRejected(err.message); return; }
+    if (byHand) toast('Could not refresh: ' + err.message);
+  }
+}
+
+let pollTimer = null;
+function startPolling() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(() => {
+    if (document.visibilityState === 'visible') refreshPlan(false);
+  }, state.account ? EDITOR_POLL : READER_POLL);
+}
+
+async function start() {
+  bindControls();
+  loadPrefs();
+  const now = today().month;
+  state.range = { from: now, to: DateEngine.addMonths(now, 11) };
+  state.key = storeGet(STORE.key);
+
+  let data = null;
+  // 1. Editors with a remembered key read the newest copy through GitHub's API.
+  if (state.key) {
+    try {
+      state.account = await verifyKey();
+      const latest = await fetchPlanFromApi(null);
+      state.remote = { sha: latest.sha, etag: latest.etag, data: latest.data };
+      data = latest.data;
+    } catch (err) {
+      state.account = null;
+      if (err instanceof KeyError) {
+        storeRemove(STORE.key); state.key = null;
+        const reason = err.message;
+        setTimeout(() => openUnlockDialog(true, reason), 300);
+      } else {
+        addMessage('warn', 'Could not reach GitHub to unlock editing (' + err.message + '). Showing the published copy, view-only. Press Refresh to try again later.');
+      }
+    }
+  }
+  // 2. Everyone else, or if that failed: the published copy from this site.
+  if (!data) {
+    try {
+      data = await loadPublishedPlan();
+      state.remote = { sha: null, etag: null, data };
+    } catch (err) {
+      document.getElementById('loading').textContent = location.protocol === 'file:'
+        ? 'Open the board from its web address (fornhamcomputerclub.com/planner). Opened as a file, the browser will not let it read the plan.'
+        : 'The plan could not be loaded. Check the internet connection and press Refresh. (' + err.message + ')';
+      return;
+    }
+  }
+  const problems = validatePlan(data);
+  if (problems.length) {
+    document.getElementById('loading').textContent = 'The plan file could not be read: ' + problems.join(' ') +
+      ' Nothing has been changed. An owner can restore an earlier version from the repository history.';
+    return;
+  }
+  state.remote.data = withDefaults(data);
+  state.plan = clone(state.remote.data);
+  state.lastLoaded = new Date();
+  render();
+  setSaveStatus(state.account ? 'saved' : 'reader');
+  startPolling();
+}
+
+start();
+</script>
+</body>
+</html>
