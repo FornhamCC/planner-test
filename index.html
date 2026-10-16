@@ -484,6 +484,17 @@ dialog.sheet[open] { display: flex; }
 }
 .drag-ghost .tile, .drag-ghost.tray-card { min-height: 0; }
 body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
+.ctx-menu {
+  position: fixed; z-index: 150; min-width: 200px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.2); display: flex; flex-direction: column;
+}
+.menu-item {
+  display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px;
+  border: 0; border-radius: 8px; background: transparent; text-align: left; font-size: 15px;
+}
+.menu-item:hover, .menu-item:focus-visible { background: var(--bronze-chip); outline: none; }
+.menu-item.danger { color: var(--danger); }
 .chip-invites { color: var(--ok); background: var(--ok-soft); border-color: #A9D3B0; display: inline-flex; align-items: center; gap: 3px; }
 .chip-invites .icon { width: 13px; height: 13px; }
 .test-banner { background: #5C4220; color: #FFFFFF; font-weight: 700; font-size: 14px; text-align: center; padding: 4px 12px; }
@@ -699,6 +710,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 
 <!-- Topic details panel (contents built by renderDetails) -->
 <dialog class="sheet" id="detailsSheet" aria-labelledby="detailsTitle"></dialog>
+
+<!-- Right-click menu for tiles and tray topics (built by openMenu) -->
+<div class="ctx-menu" id="ctxMenu" role="menu" hidden></div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -1762,8 +1776,7 @@ function renderTile(sKey, session, col) {
     vars: colourVars(cat),
     attrs: {
       'aria-label': topic.title + ', ' + whenText + (cancelled ? ', cancelled' : '') +
-        (canEdit() ? (selected ? '. Selected. Press again for details.' : '. Select to move, copy or remove.') : '. Open details.'),
-      'aria-pressed': canEdit() ? String(!!selected) : null,
+        (selected ? '. Being moved.' : '. Open details.') + (canEdit() ? ' Right-click for more actions.' : ''),
       'data-drag': canEdit() ? 'tile' : null
     },
     on: { click: () => handleTileTap(sKey) }
@@ -1925,12 +1938,8 @@ function stripContent() {
     const session = state.plan.sessions[pick.key];
     const topic = state.plan.topics[session.topicId] || {};
     return {
-      text: [el('strong', { text: topic.title }), ' — ' + describeSession(pick.key) + '. Tap a lit cell to move it.'],
-      actions: [
-        stripButton('Details', 'edit', () => openDetails(pick.key)),
-        stripButton('Copy', 'copy', () => copyTopic(session.topicId)),
-        stripButton('Remove from board', 'remove', () => removeSession(pick.key)),
-        stripButton('Cancel', null, clearPick)]
+      text: ['Moving ', el('strong', { text: topic.title }), ' from ' + describeSession(pick.key) + '. Click or tap a lit cell to move it there.'],
+      actions: [stripButton('Cancel', null, clearPick)]
     };
   }
   if (pick && pick.kind === 'topic') {
@@ -2132,8 +2141,14 @@ function renderDetails() {
         el('div', { class: 'inner' },
           el('label', { class: 'visually-hidden', htmlFor: 'fBriefing', text: 'Briefing text' }),
           el('textarea', { class: 'input', id: 'fBriefing', rows: 7, maxLength: LIMITS.briefing, value: topic.briefing || '' }))),
+      // Actions on this tile or topic. They close the panel first; any unsaved
+      // edits in the panel are dropped, so save before using them.
       el('div', { class: 'danger-zone' },
-        session ? el('button', { type: 'button', class: 'btn', on: { click: () => removeSession(d.key) } }, icon('remove'), 'Remove from board') : null,
+        session
+          ? el('button', { type: 'button', class: 'btn', on: { click: () => startMove(d.key) } }, icon('remove'), 'Move to…')
+          : el('button', { type: 'button', class: 'btn', on: { click: () => startPlace(d.topicId) } }, icon('plus'), 'Place on board…'),
+        el('button', { type: 'button', class: 'btn', on: { click: () => { closeDetails(); copyTopic(d.topicId); } } }, icon('copy'), 'Copy'),
+        session ? el('button', { type: 'button', class: 'btn', on: { click: () => removeSession(d.key) } }, icon('trash'), 'Remove from board') : null,
         el('button', { type: 'button', class: 'btn btn-danger-text', on: { click: () => deleteTopic(d.topicId) } }, icon('trash'), 'Delete topic')));
     if (session) body.querySelector('#fStatus').value = session.status || 'planned';
   } else {
@@ -2259,16 +2274,18 @@ function topicFitsCell(topicId, key) {
 
 /**
  * The cells to light for the current selection or drag, as a Set of cell keys.
- * - A tile can move to any cell its topic fits. An occupied cell counts only if
- *   the two tiles could swap, i.e. the other topic also fits this tile's cell.
- * - A topic from the tray (or copied) can go in any cell it fits, except one
- *   that already holds the same topic. An occupied cell means "replace".
+ * - A tile can move to any empty cell its topic fits.
+ * - A topic from the tray (or copied) can go in any empty cell it fits.
+ * - While dragging only, occupied cells light too: dropping a tile there swaps
+ *   the two (if each fits the other's cell); dropping a topic there replaces
+ *   the tile (unless it already holds the same topic).
  * Only the months and columns on screen are considered.
  */
 function currentTargets() {
   const targets = new Set();
   if (!canEdit()) return targets;
-  const source = state.drag && state.drag.active ? state.drag.source : state.pick;
+  const dragging = !!(state.drag && state.drag.active);
+  const source = dragging ? state.drag.source : state.pick;
   if (!source) return targets;
   const s = settings();
   const cols = visibleColumns();
@@ -2277,10 +2294,12 @@ function currentTargets() {
     .forEach(month => cols.forEach(col => {
       const key = sessionKey(month, col.club.code, col.cat.code);
       const occupant = state.plan.sessions[key];
+      if (occupant && !dragging) return;   // swap / replace are drag-only
       if (source.kind === 'tile') {
         const moving = state.plan.sessions[source.key];
         if (!moving || key === source.key || !topicFitsCell(moving.topicId, key)) return;
         if (occupant && !topicFitsCell(occupant.topicId, source.key)) return;
+        if (occupant && occupant.topicId === moving.topicId) return;   // swapping a topic with itself does nothing useful
       } else {
         if (!topicFitsCell(source.topicId, key)) return;
         if (occupant && occupant.topicId === source.topicId) return;
@@ -2308,18 +2327,94 @@ function clearPick() {
 /* --- Taps and clicks ------------------------------------------------------------- */
 
 /**
- * A tap on a tile. View mode: open the details. Edit mode: if something else is
- * selected and this cell is lit, act on it (swap or replace); a second tap on
- * the selected tile opens its details; otherwise select this tile.
+ * A click or tap on a tile always opens its details: read-only in View mode,
+ * editable in Edit mode. Opening never selects, moves or copies anything.
+ * Moving is by dragging, or by "Move to…" (right-click menu or details panel);
+ * copying is by "Copy" in the same places.
  */
 function handleTileTap(key) {
-  if (!canEdit()) { openDetails(key); return; }
-  const pick = state.pick;
-  if (pick && pick.kind === 'tile' && pick.key === key) { openDetails(key); return; }
-  if (pick && currentTargets().has(key)) { performDrop(pick, key); return; }
+  closeMenu();
+  state.pick = null; state.cursorKey = null; state.prompt = null;
+  openDetails(key);
+}
+
+/** "Move to…": select a tile so a tap or click on a lit cell moves it there. */
+function startMove(key) {
+  closeMenu();
+  if (document.getElementById('detailsSheet').open) closeDetails();
   state.pick = { kind: 'tile', key };
   state.cursorKey = null; state.prompt = null;
   render();
+  toast('Now click or tap a lit cell to move it there.');
+}
+
+/** "Place on board…": select a topic so a tap or click on a lit cell places it. */
+function startPlace(topicId) {
+  closeMenu();
+  if (document.getElementById('detailsSheet').open) closeDetails();
+  state.pick = { kind: 'topic', topicId, from: 'tray' };
+  state.cursorKey = null; state.prompt = null;
+  if (!trayDocked()) state.trayOverlay = false;
+  render();
+}
+
+/* --- The right-click menu (PC) ------------------------------------------------
+   A small menu of actions for a tile or a tray topic. It is a plain list of
+   buttons placed where the mouse was; any click elsewhere, Escape or scrolling
+   closes it. The keyboard's Menu key (or Shift+F10) opens it on a focused tile. */
+
+function openMenu(items, x, y, label) {
+  const menu = document.getElementById('ctxMenu');
+  menu.replaceChildren(...items.map(([text, iconName, run, cls]) =>
+    el('button', { type: 'button', class: 'menu-item ' + (cls || ''), attrs: { role: 'menuitem' },
+      on: { click: () => { closeMenu(); run(); } } }, icon(iconName), text)));
+  menu.setAttribute('aria-label', label);
+  menu.dataset.scrollTop = document.getElementById('gridScroll').scrollTop;
+  menu.hidden = false;
+  // Keep the menu on screen: measure it, then pull it back inside the window if needed.
+  const w = menu.offsetWidth, h = menu.offsetHeight;
+  menu.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
+  menu.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+  menu.querySelector('button').focus();
+}
+function closeMenu() {
+  const menu = document.getElementById('ctxMenu');
+  if (menu && !menu.hidden) menu.hidden = true;
+}
+function openTileMenu(key, x, y) {
+  const ses = state.plan.sessions[key];
+  if (!ses) return;
+  const topic = state.plan.topics[ses.topicId] || { title: '' };
+  openMenu([
+    ['Edit details', 'edit', () => openDetails(key)],
+    ['Move to…', 'remove', () => startMove(key)],
+    ['Copy', 'copy', () => copyTopic(ses.topicId)],
+    ['Remove from board', 'trash', () => removeSession(key), 'danger']
+  ], x, y, 'Actions for ' + topic.title);
+}
+function openTrayMenu(topicId, x, y) {
+  const topic = state.plan.topics[topicId];
+  if (!topic) return;
+  openMenu([
+    ['Place on board…', 'plus', () => startPlace(topicId)],
+    ['Edit details', 'edit', () => openTopicDetails(topicId)],
+    ['Copy', 'copy', () => copyTopic(topicId)],
+    ['Delete topic', 'trash', () => deleteTopic(topicId), 'danger']
+  ], x, y, 'Actions for ' + topic.title);
+}
+
+/** The browser's contextmenu event (right-click, or the Menu key) on a tile or tray card. */
+function onContextMenu(e) {
+  if (!canEdit()) return;
+  const handle = e.target.closest && e.target.closest('[data-drag]');
+  if (!handle || e.target.closest('.drag-ghost')) return;
+  e.preventDefault();   // our menu instead of the browser's
+  if (state.drag) abandonDrag();
+  // From the keyboard there is no mouse position (0, 0): use the element's corner.
+  let x = e.clientX, y = e.clientY;
+  if (!x && !y) { const r = handle.getBoundingClientRect(); x = r.left + 12; y = r.top + 24; }
+  if (handle.dataset.drag === 'tile') openTileMenu(handle.closest('[data-key]').dataset.key, x, y);
+  else openTrayMenu(handle.dataset.topic, x, y);
 }
 
 /** A tap on an empty cell (Edit mode): place the selection, or offer New topic / Paste here. */
@@ -2461,6 +2556,12 @@ async function moveSession(fromKey, toKey) {
   if (!topicFitsCell(moving.topicId, toKey)) { toast(whyNotHere(moving.topicId, toKey)); return; }
   const occupant = state.plan.sessions[toKey];
   let ops, label;
+  if (occupant && occupant.topicId === moving.topicId) {
+    // Both tiles show the same topic: a swap would change nothing except reset
+    // their dates and times to the meeting pattern, losing any edits.
+    toast('That cell already has “' + topic.title + '”.');
+    return;
+  }
   if (occupant) {
     const other = state.plan.topics[occupant.topicId] || { title: 'another topic' };
     if (!topicFitsCell(occupant.topicId, fromKey)) { toast('“' + other.title + '” cannot go in the cell “' + topic.title + '” is leaving, so they cannot swap.'); return; }
@@ -3126,7 +3227,7 @@ function bindControls() {
     state.mode = state.mode === 'edit' ? 'view' : 'edit';
     if (state.mode === 'view') { state.pick = null; state.cursorKey = null; state.prompt = null; state.trayOverlay = false; }
     render();
-    toast(state.mode === 'edit' ? 'Editing is on. Tap a tile to select it, or drag it.' : 'Editing is off.');
+    toast(state.mode === 'edit' ? 'Editing is on. Click a tile to edit it, drag to move it, right-click for more.' : 'Editing is off.');
   });
 
   // --- Stage 2: editing the board ---
@@ -3150,7 +3251,16 @@ function bindControls() {
   document.addEventListener('touchmove', e => { if (state.drag && state.drag.active) e.preventDefault(); }, { passive: false });
   // A long press can open a context menu (Windows touch screens, some browsers);
   // in Edit mode a long press on a tile means "drag", so suppress the menu there.
-  document.addEventListener('contextmenu', e => { if (canEdit() && e.target.closest('[data-drag]')) e.preventDefault(); });
+  document.addEventListener('contextmenu', onContextMenu);
+  // Close the right-click menu on any press outside it, on Escape, or when the board scrolls.
+  document.addEventListener('pointerdown', e => { if (!e.target.closest('#ctxMenu')) closeMenu(); }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); }, true);
+  // Only a scroll that happens after the menu opened closes it (a late scroll event
+  // from just before the right-click must not).
+  document.getElementById('gridScroll').addEventListener('scroll', e => {
+    const menu = document.getElementById('ctxMenu');
+    if (!menu.hidden && Math.abs(e.target.scrollTop - Number(menu.dataset.scrollTop || 0)) > 4) closeMenu();
+  }, { passive: true });
   // Swallow the click that some browsers send at the end of a drag (registered
   // in the capture phase, so it runs before the tile's own click handler).
   // Only clicks on the board or tray are swallowed, so a quick press of a strip
