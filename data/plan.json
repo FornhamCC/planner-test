@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-16T14:56:24.083Z",
+    "savedAt": "2026-10-16T14:56:41.178Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -167,6 +167,17 @@
       "briefing": "",
       "invitesSent": false,
       "updatedAt": "2026-10-16T14:52:14.685Z",
+      "updatedBy": "bernieonline"
+    },
+    "t_qecqvvse": {
+      "title": "GBCC AGM",
+      "category": "WB",
+      "presenter": "",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "invitesSent": false,
+      "updatedAt": "2026-10-16T14:56:39.167Z",
       "updatedBy": "bernieonline"
     }
   },
