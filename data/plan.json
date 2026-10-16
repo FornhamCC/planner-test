@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-16T14:50:14.986Z",
+    "savedAt": "2026-10-16T14:52:16.695Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -157,6 +157,17 @@
       "invitesSent": false,
       "updatedAt": "2026-10-16T14:49:43.423Z",
       "updatedBy": "bernieonline"
+    },
+    "t_lpuuwg8d": {
+      "title": "Files/Folders and Requested Topics",
+      "category": "WB",
+      "presenter": "BG",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "invitesSent": false,
+      "updatedAt": "2026-10-16T14:52:14.685Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -288,6 +299,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-10-16T14:50:12.975Z",
+      "updatedBy": "bernieonline"
+    },
+    "2026-11_GBCC_WB": {
+      "topicId": "t_lpuuwg8d",
+      "club": "GBCC",
+      "category": "WB",
+      "month": "2026-11",
+      "date": "2026-11-23",
+      "start": "12:30",
+      "end": "14:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-10-16T14:52:14.688Z",
       "updatedBy": "bernieonline"
     }
   }
