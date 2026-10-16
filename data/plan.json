@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-15T14:32:27.176Z",
+    "savedAt": "2026-10-16T13:55:09.377Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -135,6 +135,17 @@
       "briefing": "The Fornham Computer Club Annual General Meeting takes the place of this month's Windows sessions. Times to be confirmed.",
       "updatedAt": "2026-10-15T13:00:00Z",
       "updatedBy": "initial setup"
+    },
+    "t_d68y9084": {
+      "title": "Drop IN Session",
+      "category": "EV",
+      "presenter": "BG",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "invitesSent": false,
+      "updatedAt": "2026-10-16T13:55:07.357Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
