@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-16T17:04:18.177Z",
+    "savedAt": "2026-10-16T17:04:25.622Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -388,19 +388,6 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-10-16T17:04:12.747Z",
-      "updatedBy": "bernieonline"
-    },
-    "2027-01_FCC_WM": {
-      "topicId": "t_iex51muo",
-      "club": "FCC",
-      "category": "WM",
-      "month": "2027-01",
-      "date": "2027-01-19",
-      "start": "14:00",
-      "end": "16:00",
-      "status": "planned",
-      "moved": false,
-      "updatedAt": "2026-10-16T17:04:14.845Z",
       "updatedBy": "bernieonline"
     }
   }
