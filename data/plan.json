@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-17T11:23:28.859Z",
+    "savedAt": "2026-10-17T11:23:31.833Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -171,19 +171,5 @@
       "updatedBy": "bernieonline"
     }
   },
-  "sessions": {
-    "2027-01_FCC_IM": {
-      "topicId": "t_odd3rs20",
-      "club": "FCC",
-      "category": "IM",
-      "month": "2027-01",
-      "date": "2027-01-26",
-      "start": "14:00",
-      "end": "16:00",
-      "status": "planned",
-      "moved": false,
-      "updatedAt": "2026-10-16T16:46:13.185Z",
-      "updatedBy": "bernieonline"
-    }
-  }
+  "sessions": {}
 }
