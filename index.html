@@ -507,6 +507,36 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .check-row input { width: 22px; height: 22px; accent-color: var(--ok); }
 .sheet-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .sheet-actions .btn { min-height: 40px; padding: 0 12px; font-size: 14px; background: rgba(255,255,255,.85); }
+.chip-closed { color: #FFFFFF; background: var(--danger); }
+/* --- Settings page (Stage 3) --- */
+.settings-card { display: flex; flex-direction: column; gap: 12px; }
+.settings-card h2 { margin-bottom: 0; }
+.settings-card h3 { margin: 6px 0 0; }
+.set-group { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px 14px; margin: 0; }
+.set-group legend { font-weight: 700; font-size: 14px; color: var(--bronze-ink); padding: 0 6px; }
+.set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 10px 14px; }
+.set-grid-4 { grid-template-columns: minmax(9rem, 2fr) minmax(8.5rem, 1fr) minmax(8.5rem, 1fr) minmax(10.5rem, 1.4fr); }
+.months-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 0 12px; }
+.months-grid .check-row { font-weight: 400; }
+.radio-list { display: flex; flex-direction: column; gap: 6px; }
+.radio-row { align-items: flex-start; font-weight: 400; }
+.radio-row > span { display: flex; flex-direction: column; gap: 2px; padding-top: 1px; }
+.radio-row .help { font-size: 13px; color: var(--muted); }
+.radio-row input { margin-top: 2px; }
+.list-rows { display: flex; flex-direction: column; gap: 8px; }
+.list-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.list-row .grow { flex: 1 1 14rem; }
+.list-row .code .input { width: 4.5rem; }
+.list-row .check-row { min-height: var(--touch); }
+.list-row > .note { min-height: var(--touch); display: inline-flex; align-items: center; }
+.settings-card > .btn { align-self: flex-start; }
+.card-error { margin: 0; color: var(--danger); font-weight: 700; font-size: 14px; }
+.card-error:empty { display: none; }
+.card-foot { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.inline-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 10px; }
+.warn-text { color: var(--warn); font-weight: 700; }
+.message .btn-quiet { min-height: 36px; }
+@media (max-width: 760px) { .set-grid-4 { grid-template-columns: 1fr 1fr; } }
 .danger-zone { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
 
 /* --- Fit the board to the iPad's width (Nice to Have 1) ----------------------
@@ -760,6 +790,7 @@ const DATA_VERSION = 1;
    plus the editing key on devices where the editor chose to unlock. */
 const STORE = {
   key: 'tpb.accessKey',
+  keyExpiry: 'tpb.keyExpiry',   // the key's expiry date typed in Settings, when GitHub does not report it
   prefs: 'tpb.prefs'
 };
 
@@ -1353,6 +1384,13 @@ function makeOp(kind, id, before, after, label) {
 /** The part of the plan an operation works on. */
 function opTable(plan, op) { return op.kind === 'topic' ? plan.topics : plan.sessions; }
 
+/*
+ * Stage 3: a third kind of operation, 'settings', changes the plan's whole
+ * settings block (id is always 'settings'). It is checked, saved, refused on a
+ * clash and undone exactly like a topic or a session change, so a Settings card
+ * can never overwrite settings changed on another device meanwhile.
+ */
+
 /**
  * Apply operations to a plan, in order. With check = true, each operation first
  * confirms the item still matches its 'before' copy; if not, someone else changed
@@ -1361,6 +1399,11 @@ function opTable(plan, op) { return op.kind === 'topic' ? plan.topics : plan.ses
  */
 function applyOps(plan, ops, check) {
   for (const op of ops) {
+    if (op.kind === 'settings') {
+      if (check && stableJson(plan.settings || null) !== stableJson(op.before)) return op;
+      plan.settings = clone(op.after);
+      continue;
+    }
     const table = opTable(plan, op);
     if (check && stableJson(table[op.id] || null) !== stableJson(op.before)) return op;
     if (op.after) table[op.id] = clone(op.after);
@@ -1472,7 +1515,8 @@ function dropConflict(op) {
   const dropped = op.group ? state.pending.filter(o => o.group === op.group) : [op];
   state.pending = state.pending.filter(o => !dropped.includes(o));
   if (op.group) state.undo = state.undo.filter(u => u.group !== op.group);
-  const what = op.kind === 'topic'
+  const what = op.kind === 'settings' ? 'the settings'
+    : op.kind === 'topic'
     ? 'the topic “' + ((op.after || op.before || {}).title || 'untitled') + '”'
     : 'the ' + describeSession(op.id) + ' session';
   addMessage('warn', 'Your change (' + op.label + ') was not saved, because ' + what + ' was changed on another device first. ' +
@@ -1521,7 +1565,11 @@ const state = {
   trayOpen: true,             // the tray is open when docked beside the board (remembered)
   trayOverlay: false,         // the tray is open over the board on narrower screens (not remembered)
   trayFilter: 'upcoming',     // 'needs', 'upcoming' or 'all'
-  drag: null                  // the drag in progress (see section 8)
+  drag: null,                 // the drag in progress (see section 8)
+  // --- Stage 3: settings ---
+  settingsDirty: new Set(),   // Settings cards holding unsaved typing (the page is then not redrawn)
+  settingsLastEditable: null, // whether the Settings page was last drawn editable
+  keyReminderShown: false     // the key renewal reminder has been shown this visit
 };
 
 /** Today on this device, worked out fresh each time it is needed. */
@@ -1698,6 +1746,7 @@ function renderHeader() {
   document.getElementById('rangeLabel').textContent =
     DateEngine.formatMonth(state.range.from, true) + ' – ' + DateEngine.formatMonth(state.range.to, true);
   if (!state.pending.length && !state.saving) setSaveStatus(null);
+  checkKeyReminder();   // Stage 3: shows once per visit, only when the key is within 30 days of expiry
 }
 
 /**
@@ -1874,11 +1923,20 @@ function renderTile(sKey, session, col) {
   el('div', { class: 'flags' },
     topic.category === CLUB_EVENT ? el('span', { class: 'chip chip-event', text: cat.name }) : null,
     cancelled ? el('span', { class: 'chip chip-cancelled', text: 'Cancelled' }) : null,
+    // Stage 3: a closure set in Settings on this tile's date (e.g. a bank holiday) shows on the tile,
+    // so a tile placed before the closure was known stands out and can be moved.
+    closureOn(session.date, session.club) ? el('span', { class: 'chip chip-closed', title: closureOn(session.date, session.club) }, 'Closed') : null,
     session.moved ? el('span', { class: 'chip chip-moved', text: 'Moved' }) : null,
     // Bug B1: the tick belongs to this tile (one email group, one meeting), not the topic.
     session.invitesSent ? el('span', { class: 'chip chip-invites', title: 'Invitations sent to ' + groupName(session.club, session.category) }, icon('check'), 'Invites sent') : null,
     topic.notesUrl ? el('span', { title: 'Tutorial notes linked' }, icon('clip')) : null,
     topic.briefing ? el('span', { title: 'Members’ briefing written' }, icon('doc')) : null));
+}
+
+/** The note of a closure (Settings) on this date for this club, or null. */
+function closureOn(date, club) {
+  const c = (settings().closures || []).find(x => x.date === date && (!x.club || x.club === club));
+  return c ? (c.note || 'Closed') : null;
 }
 
 /* --- The topic tray ------------------------------------------------------------ */
@@ -1902,13 +1960,17 @@ function topicPlacement(topicId) {
     byClub,
     count: all.length,
     past: all.length > 0 && all.every(([, s]) => s.date < todayDate),
-    firstDate: all.length ? all[0][1].date : null
+    firstDate: all.length ? all[0][1].date : null,
+    lastDate: all.length ? all[all.length - 1][1].date : null
   };
 }
 
 /** Which topics the tray lists, in order: category, then first date (unplaced last), then title. */
 function trayTopics() {
   const order = CATEGORY_ORDER.concat([CLUB_EVENT]);
+  const t0 = DateEngine.parseDate(today().date);
+  // The same day one year ago (29 Feb falls back to 28 Feb): the edge of "Past 12 months".
+  const yearAgo = DateEngine.isoDate(t0.year - 1, t0.month, Math.min(t0.day, DateEngine.daysInMonth(t0.year - 1, t0.month)));
   return Object.entries(state.plan.topics)
     .map(([id, t]) => ({ id, t, p: topicPlacement(id) }))
     .filter(({ t }) => {
@@ -1917,8 +1979,11 @@ function trayTopics() {
       return cat && cat.platform === state.platform;
     })
     .filter(({ t, p }) => {
-      if (state.trayFilter === 'all') return true;
-      if (p.past) return false;                                  // past topics: only under "All"
+      // Nice to Have 6: "Past 12 months" (stored as 'all') lists upcoming topics plus those
+      // whose last session was within the last 12 months; older ones drop out of the tray
+      // (their tiles stay on the board, and the yearly archive will take them in Stage 4).
+      if (state.trayFilter === 'all') return !p.past || p.lastDate >= yearAgo;
+      if (p.past) return false;                                  // past topics: only under "Past 12 months"
       if (state.trayFilter === 'needs') {
         // Needs placing: a club event not placed anywhere, or a group topic missing from a club.
         if (t.category === CLUB_EVENT) return p.count === 0;
@@ -1940,7 +2005,7 @@ function renderTray() {
   if (!shown) return;
   tray.classList.toggle('overlay', !trayDocked());
   tray.classList.toggle('can-drag', canEdit());
-  const filters = [['needs', 'Needs placing'], ['upcoming', 'Upcoming'], ['all', 'All']];
+  const filters = [['needs', 'Needs placing'], ['upcoming', 'Upcoming'], ['all', 'Past 12 months']];
   const list = trayTopics();
   const head = el('div', { class: 'tray-head' },
     el('div', { class: 'top' },
@@ -2070,64 +2135,480 @@ function stripContent() {
   return null;
 }
 
-/** Settings page: editing access now; club, pattern and presenter editing come in Stage 3. */
-function renderSettings() {
-  const s = settings();
+/* =====================================================================
+   7b. SETTINGS PAGE (Stage 3)
+   Owners with Edit on can change the settings, one card at a time. Each card
+   reads its own fields when its Save button is pressed, checks them, and
+   saves ONE 'settings' operation (section 5) — plus, when the meeting pattern
+   changes, operations that move future tiles to their new pattern dates if
+   the owner agrees. So a card's change is saved, refused on a clash and
+   undone as one action, like any change on the board.
+   While a card has unsaved typing, the page is not redrawn by the regular
+   refresh (the same protection the details panel has).
+   Codes (club GBCC/FCC, categories WB/WM/IB/IM, presenter codes in use) are
+   fixed, because every saved tile and topic refers to them.
+   ===================================================================== */
+
+const WEEKDAYS = [['Mon', 'Monday'], ['Tue', 'Tuesday'], ['Wed', 'Wednesday'], ['Thu', 'Thursday'], ['Fri', 'Friday']];
+const SETTINGS_LIMITS = { name: 60, note: 60 };
+
+/** True when this device may change settings right now: an owner, with Edit on. */
+function canEditSettings() { return canEdit() && !!state.account && state.account.isOwner; }
+
+/**
+ * Draw the Settings page. Skipped while a card holds unsaved typing, unless
+ * the page is being forced (after a save or discard) or editing has just been
+ * switched on or off (then unsaved typing is dropped, as the form changes).
+ */
+function renderSettings(force) {
+  const editable = canEditSettings();
+  if (!force && state.settingsDirty.size && editable === state.settingsLastEditable) return;
+  state.settingsDirty.clear();
+  state.settingsLastEditable = editable;
   const box = document.getElementById('settingsInner');
+  const intro = state.account && state.account.isOwner && !editable
+    ? el('div', { class: 'message', attrs: { 'data-tone': 'info' } }, el('div', { class: 'message-text', text: 'Turn on Edit (top right) to change these settings.' }))
+    : null;
+  box.replaceChildren(...[intro, renderAccessCard(), settingsCards(editable), renderAboutCard()].flat().filter(Boolean));
+}
+
+/** The editable (or read-only) cards, in page order. */
+function settingsCards(editable) {
+  return [
+    settingsCard('clubs', 'Board and clubs', editable, buildClubsCard, collectClubsCard),
+    settingsCard('groups', 'Groups and times', editable, buildGroupsCard, collectGroupsCard),
+    settingsCard('weeks', 'Weeks and breaks', editable, buildWeeksCard, collectWeeksCard),
+    settingsCard('closures', 'Closures', editable, buildClosuresCard, collectClosuresCard),
+    settingsCard('presenters', 'Presenters', editable, buildPresentersCard, collectPresentersCard)
+  ];
+}
+
+/**
+ * One card. build(editable) returns the card's body; collect(card, settings)
+ * reads the fields into a copy of the settings and returns it, or throws
+ * Error('message') when something needs correcting.
+ */
+function settingsCard(id, title, editable, build, collect) {
+  const errorBox = el('p', { class: 'card-error', attrs: { role: 'alert' } });
+  const card = el('section', { class: 'card settings-card', attrs: { 'data-card': id } },
+    el('h2', { text: title }), build(editable));
+  if (editable) {
+    const save = el('button', { type: 'button', class: 'btn btn-dark', text: 'Save changes', disabled: true });
+    const discard = el('button', { type: 'button', class: 'btn', text: 'Discard', disabled: true });
+    // Any typing or choice in the card marks it as changed and enables its buttons.
+    const markDirty = () => { state.settingsDirty.add(id); save.disabled = false; discard.disabled = false; errorBox.textContent = ''; };
+    card.addEventListener('input', markDirty);
+    card.addEventListener('change', markDirty);
+    card._markDirty = markDirty;   // list cards call this after adding or removing a row
+    save.addEventListener('click', async () => {
+      let next;
+      try { next = collect(card, clone(settings())); }
+      catch (err) { errorBox.textContent = err.message; return; }
+      const done = await applySettingsChange(next, 'Settings: ' + title.toLowerCase(), errorBox);
+      if (done) { state.settingsDirty.delete(id); renderSettings(true); }
+    });
+    discard.addEventListener('click', () => { state.settingsDirty.delete(id); renderSettings(true); });
+    card.append(errorBox, el('div', { class: 'card-foot' }, discard, save));
+  }
+  return card;
+}
+
+/** A labelled text box. */
+function setInput(label, value, attrs) {
+  return el('label', { class: 'field' }, label,
+    el('input', Object.assign({ class: 'input', value: value || '', maxLength: SETTINGS_LIMITS.name }, attrs || {})));
+}
+/** A labelled drop-down: options are [value, text] pairs. */
+function setSelect(label, value, options, attrs) {
+  const sel = el('select', Object.assign({ class: 'input' }, attrs || {}),
+    options.map(([v, t]) => el('option', { value: v, text: t })));
+  sel.value = value;
+  return el('label', { class: 'field' }, label, sel);
+}
+/** The value of the field with this data-f name inside a card or row. */
+function fieldValue(scope, name) {
+  const f = scope.querySelector('[data-f="' + name + '"]');
+  // Tick boxes and radio buttons report whether they are chosen; other fields their text.
+  return f ? (f.type === 'checkbox' || f.type === 'radio' ? f.checked : f.value.trim()) : '';
+}
+function needText(text, what) {
+  if (!text) throw new Error('Please fill in ' + what + '.');
+  if (text.length > SETTINGS_LIMITS.name) throw new Error(what[0].toUpperCase() + what.slice(1) + ' is too long.');
+  return text;
+}
+
+/* --- Board and clubs --------------------------------------------------------- */
+function buildClubsCard(editable) {
+  const s = settings();
+  if (!editable) {
+    return [el('dl', { class: 'kv' }, el('dt', { text: 'Board title' }), el('dd', { text: s.boardTitle })),
+      el('table', { class: 'simple' },
+        el('thead', {}, el('tr', {}, el('th', { text: 'Club' }), el('th', { text: 'Short name' }), el('th', { text: 'Code' }), el('th', { text: 'Meets on' }))),
+        el('tbody', {}, s.clubs.map(c => el('tr', {}, el('td', { text: c.name }), el('td', { text: c.shortName || '' }), el('td', { text: c.code }),
+          el('td', { text: (WEEKDAYS.find(w => w[0] === c.meetingDay) || [c.meetingDay, c.meetingDay])[1] })))))];
+  }
+  return [
+    setInput('Board title', s.boardTitle, { attrs: { 'data-f': 'boardTitle' } }),
+    s.clubs.map(c => el('fieldset', { class: 'set-group', attrs: { 'data-club': c.code } },
+      el('legend', { text: c.code }),
+      el('div', { class: 'set-grid' },
+        setInput('Full name', c.name, { attrs: { 'data-f': 'name' } }),
+        setInput('Short name (used in the heading)', c.shortName, { attrs: { 'data-f': 'shortName' } }),
+        setSelect('Meets on', c.meetingDay, WEEKDAYS, { attrs: { 'data-f': 'meetingDay' } })))),
+    el('p', { class: 'note', text: 'The codes (GBCC, FCC) cannot be changed: every tile refers to them.' })
+  ];
+}
+function collectClubsCard(card, s) {
+  s.boardTitle = needText(fieldValue(card, 'boardTitle'), 'the board title');
+  s.clubs.forEach(c => {
+    const box = card.querySelector('[data-club="' + c.code + '"]');
+    c.name = needText(fieldValue(box, 'name'), c.code + '’s full name');
+    c.shortName = needText(fieldValue(box, 'shortName'), c.code + '’s short name');
+    c.meetingDay = fieldValue(box, 'meetingDay');
+  });
+  return s;
+}
+
+/* --- Groups and times -------------------------------------------------------- */
+const WEEK_CHOICES = [['2', 'Second-last week'], ['1', 'Last week']];
+function buildGroupsCard(editable) {
+  const s = settings();
+  const time = t => DateEngine.formatTime(t);
+  if (!editable) {
+    return [
+      el('table', { class: 'simple' },
+        el('thead', {}, el('tr', {}, el('th', { text: 'Category' }), el('th', { text: 'Time' }), el('th', { text: 'Week' }))),
+        el('tbody', {}, s.categories.map(c => el('tr', {}, el('td', { text: c.name }), el('td', { text: time(c.start) + '–' + time(c.end) }),
+          el('td', { text: (WEEK_CHOICES.find(w => w[0] === String(c.weekFromEnd)) || ['', c.weekFromEnd + ' weeks from the end'])[1] }))))),
+      el('h3', { text: 'Group names' }),
+      el('p', { text: s.clubs.flatMap(c => CATEGORY_ORDER.map(cat => groupName(c.code, cat))).join(' · ') })];
+  }
+  return [
+    s.categories.map(c => el('fieldset', { class: 'set-group', attrs: { 'data-cat': c.code } },
+      el('legend', { text: c.code }),
+      el('div', { class: 'set-grid set-grid-4' },
+        setInput('Name', c.name, { attrs: { 'data-f': 'name' } }),
+        el('label', { class: 'field' }, 'Starts', el('input', { class: 'input', type: 'time', value: c.start, attrs: { 'data-f': 'start' } })),
+        el('label', { class: 'field' }, 'Ends', el('input', { class: 'input', type: 'time', value: c.end, attrs: { 'data-f': 'end' } })),
+        setSelect('Meets in', String(c.weekFromEnd), WEEK_CHOICES, { attrs: { 'data-f': 'week' } })))),
+    el('h3', { text: 'Group names' }),
+    el('p', { class: 'note', text: 'How each column’s group is named on tiles, in details and in commit messages.' }),
+    el('div', { class: 'set-grid' },
+      s.clubs.flatMap(c => CATEGORY_ORDER.map(cat => setInput(c.code + ' · ' + (categoryOf(cat) || {}).name, groupName(c.code, cat),
+        { attrs: { 'data-f': 'g_' + c.code + '_' + cat } }))))
+  ];
+}
+function collectGroupsCard(card, s) {
+  s.categories.forEach(c => {
+    const box = card.querySelector('[data-cat="' + c.code + '"]');
+    c.name = needText(fieldValue(box, 'name'), 'the ' + c.code + ' category name');
+    const start = fieldValue(box, 'start'), end = fieldValue(box, 'end');
+    if (!DateEngine.isTime(start) || !DateEngine.isTime(end)) throw new Error('Please give a start and end time for ' + c.name + '.');
+    if (end <= start) throw new Error(c.name + ' must end after it starts.');
+    c.start = start; c.end = end;
+    c.weekFromEnd = Number(fieldValue(box, 'week'));
+  });
+  // Beginners and Main of the same platform share a week but must not overlap in time.
+  ['Windows', 'iPad'].forEach(pl => {
+    const cats = s.categories.filter(c => c.platform === pl);
+    if (cats.length === 2 && cats[0].weekFromEnd === cats[1].weekFromEnd && cats[0].start < cats[1].end && cats[1].start < cats[0].end) {
+      throw new Error(cats[0].name + ' and ' + cats[1].name + ' meet in the same week and their times overlap.');
+    }
+  });
+  s.groupNames = Object.assign({}, s.groupNames);
+  s.clubs.forEach(c => CATEGORY_ORDER.forEach(cat => {
+    s.groupNames[c.code + '_' + cat] = needText(fieldValue(card, 'g_' + c.code + '_' + cat), 'every group name');
+  }));
+  return s;
+}
+
+/* --- Weeks and breaks ---------------------------------------------------------- */
+function buildWeeksCard(editable) {
+  const s = settings();
+  const rules = [
+    ['eachClub', 'Each club takes its own last two meeting days of the month (usual)', 'When the last Monday is the month’s last day, Great Barton keeps it and Fornham meets a week earlier.'],
+    ['sameWeek', 'Both clubs use the same two weeks', 'Fornham always meets the day after Great Barton.']
+  ];
+  const breaks = (s.breakMonths || []).map(Number);
+  if (!editable) {
+    return [el('p', { text: (rules.find(r => r[0] === s.weekRule) || rules[0])[1] + '.' }),
+      el('h3', { text: 'Break months (no meetings)' }),
+      el('p', { text: breaks.map(m => DateEngine.MONTH_LONG[m - 1]).join(', ') || 'None' })];
+  }
+  return [
+    el('div', { class: 'radio-list', attrs: { role: 'radiogroup', 'aria-label': 'Week rule' } },
+      rules.map(([v, t, help]) => el('label', { class: 'check-row radio-row' },
+        el('input', { type: 'radio', name: 'weekRule', value: v, checked: s.weekRule === v, attrs: { 'data-f': 'rule_' + v } }),
+        el('span', {}, t, el('span', { class: 'help', text: help }))))),
+    el('h3', { text: 'Break months (no meetings)' }),
+    el('div', { class: 'months-grid' },
+      DateEngine.MONTH_LONG.map((name, i) => el('label', { class: 'check-row' },
+        el('input', { type: 'checkbox', checked: breaks.includes(i + 1), attrs: { 'data-f': 'm' + (i + 1) } }), el('span', { text: name })))),
+    el('p', { class: 'note', text: 'A month can only become a break month when it has no tiles in it.' })
+  ];
+}
+function collectWeeksCard(card, s) {
+  s.weekRule = fieldValue(card, 'rule_sameWeek') ? 'sameWeek' : 'eachClub';
+  s.breakMonths = DateEngine.MONTH_LONG.map((_, i) => i + 1).filter(m => fieldValue(card, 'm' + m));
+  // Keep existing break names (e.g. "Summer break"); a newly added month is just "Break".
+  const names = {};
+  s.breakMonths.forEach(m => { names[m] = (s.breakNames && s.breakNames[m]) || 'Break'; });
+  s.breakNames = names;
+  if (s.breakMonths.length > 10) throw new Error('At least two months must have meetings.');
+  return s;
+}
+
+/* --- Closures ------------------------------------------------------------------- */
+function closureRow(c) {
+  const clubs = [['', 'Both clubs']].concat(settings().clubs.map(k => [k.code, k.code + ' only']));
+  const row = el('div', { class: 'list-row closure-row' },
+    el('label', { class: 'field' }, 'Date', el('input', { class: 'input', type: 'date', value: c.date || '', attrs: { 'data-f': 'date' } })),
+    setSelect('Club', c.club || '', clubs, { attrs: { 'data-f': 'club' } }),
+    el('label', { class: 'field grow' }, 'Note (shown in the cell)',
+      el('input', { class: 'input', value: c.note || '', maxLength: SETTINGS_LIMITS.note, placeholder: 'e.g. Bank holiday — hall closed', attrs: { 'data-f': 'note' } })),
+    el('button', { type: 'button', class: 'btn btn-quiet btn-icon', attrs: { 'aria-label': 'Remove this closure' },
+      on: { click: e => { const card = row.closest('.settings-card'); row.remove(); card._markDirty(); } } }, icon('trash')));
+  return row;
+}
+function buildClosuresCard(editable) {
+  const list = (settings().closures || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+  const clubLabel = c => c.club ? c.club + ' only' : 'Both clubs';
+  if (!editable) {
+    return list.length
+      ? el('table', { class: 'simple' }, el('tbody', {}, list.map(c => el('tr', {},
+          el('td', { text: DateEngine.formatDayDate(c.date, true) }), el('td', { text: clubLabel(c) }), el('td', { text: c.note || 'Closed' })))))
+      : el('p', { class: 'note', text: 'No closures. Owners can mark a bank holiday or a day the hall is closed.' });
+  }
+  const rows = el('div', { class: 'list-rows', attrs: { 'data-list': 'closures' } }, list.map(closureRow));
+  return [
+    el('p', { class: 'note', text: 'A closed day shows in its cells, and on any tile already placed on it, so it can be moved.' }),
+    rows,
+    el('button', { type: 'button', class: 'btn', on: { click: e => { rows.append(closureRow({})); e.target.closest('.settings-card')._markDirty(); } } }, icon('plus'), 'Add a closure')
+  ];
+}
+function collectClosuresCard(card, s) {
+  const seen = new Set();
+  s.closures = [...card.querySelectorAll('.closure-row')].map(row => {
+    const date = fieldValue(row, 'date'), club = fieldValue(row, 'club'), note = fieldValue(row, 'note');
+    if (!DateEngine.parseDate(date)) throw new Error('Each closure needs a date.');
+    if (note.length > SETTINGS_LIMITS.note) throw new Error('A closure note is too long.');
+    const key = date + club;
+    if (seen.has(key)) throw new Error(DateEngine.formatDayDate(date, true) + ' is listed twice.');
+    seen.add(key);
+    return club ? { date, club, note } : { date, note };
+  }).sort((a, b) => a.date.localeCompare(b.date));
+  return s;
+}
+
+/* --- Presenters ------------------------------------------------------------------ */
+/** Presenter codes used by any topic: those can be renamed or retired, not deleted or recoded. */
+function presenterCodesInUse() { return new Set(Object.values(state.plan.topics).map(t => t.presenter).filter(Boolean)); }
+function presenterRow(p, isNew) {
+  const used = !isNew && presenterCodesInUse().has(p.code);
+  const row = el('div', { class: 'list-row presenter-row', attrs: { 'data-code': isNew ? '' : p.code } },
+    el('label', { class: 'field code' }, 'Code',
+      el('input', { class: 'input', value: p.code || '', maxLength: 2, disabled: !isNew, autocapitalize: 'characters',
+        attrs: { 'data-f': 'code', style: 'text-transform:uppercase', 'aria-describedby': isNew ? null : 'codeFixedHelp' } })),
+    el('label', { class: 'field grow' }, 'Name', el('input', { class: 'input', value: p.name || '', maxLength: SETTINGS_LIMITS.name, attrs: { 'data-f': 'name' } })),
+    el('label', { class: 'check-row' }, el('input', { type: 'checkbox', checked: p.active !== false, attrs: { 'data-f': 'active' } }), el('span', { text: 'Active' })),
+    used
+      ? el('span', { class: 'note', text: 'In use', title: 'Topics use this code, so it cannot be deleted. Untick Active to retire it.' })
+      : el('button', { type: 'button', class: 'btn btn-quiet btn-icon', attrs: { 'aria-label': 'Delete presenter ' + (p.code || '') },
+          on: { click: () => { const card = row.closest('.settings-card'); row.remove(); card._markDirty(); } } }, icon('trash')));
+  return row;
+}
+function buildPresentersCard(editable) {
+  const list = settings().presenters;
+  if (!editable) {
+    return el('p', { text: list.length ? list.map(p => p.code + ' — ' + p.name + (p.active === false ? ' (retired)' : '')).join(', ') : 'None yet' });
+  }
+  const rows = el('div', { class: 'list-rows', attrs: { 'data-list': 'presenters' } }, list.map(p => presenterRow(p, false)));
+  return [
+    el('p', { class: 'note', id: 'codeFixedHelp', text: 'Two letters, shown on tiles. A code topics already use stays fixed; untick Active to retire a presenter (they stay on past topics but leave the Presenter list).' }),
+    rows,
+    el('button', { type: 'button', class: 'btn', on: { click: e => { rows.append(presenterRow({ active: true }, true)); e.target.closest('.settings-card')._markDirty(); } } }, icon('plus'), 'Add a presenter')
+  ];
+}
+function collectPresentersCard(card, s) {
+  const seen = new Set();
+  s.presenters = [...card.querySelectorAll('.presenter-row')].map(row => {
+    const code = (row.dataset.code || fieldValue(row, 'code')).toUpperCase();
+    const name = needText(fieldValue(row, 'name'), 'each presenter’s name');
+    if (!/^[A-Z]{2}$/.test(code)) throw new Error('Presenter codes are two letters, such as BG.');
+    if (seen.has(code)) throw new Error('The code ' + code + ' is used twice.');
+    seen.add(code);
+    return { code, name, active: !!fieldValue(row, 'active') };
+  });
+  // A code still used by a topic must not disappear (its tiles would show a bare code).
+  const missing = [...presenterCodesInUse()].filter(code => !seen.has(code));
+  if (missing.length) throw new Error('Topics still use ' + missing.join(', ') + '. Retire instead of deleting.');
+  return s;
+}
+
+/* --- Saving a card -------------------------------------------------------------- */
+
+/**
+ * Save a changed copy of the settings.
+ * 1. Refuse to turn a month into a break month while it still holds tiles
+ *    (they would vanish from the board).
+ * 2. Work out which future tiles (today onwards) follow the meeting pattern
+ *    and would get a new date or new times under the new settings. If any,
+ *    ask whether to update them too. Tiles moved by hand and past tiles are
+ *    never changed; an updated tile loses its "Invitations sent" tick,
+ *    because the invitation named the old date or time.
+ * 3. Save the settings and any tile updates as one action (one undo).
+ * Returns true once queued for saving, false if nothing was saved.
+ */
+async function applySettingsChange(next, label, errorBox) {
+  const before = settings();
+  if (stableJson(before) === stableJson(next)) { toast('Nothing has changed.'); return true; }
+  const newBreaks = (next.breakMonths || []).map(Number);
+  const blocked = Object.entries(state.plan.sessions)
+    .filter(([, ses]) => DateEngine.isBreakMonth(next, ses.month) && !DateEngine.isBreakMonth(before, ses.month));
+  if (blocked.length) {
+    const months = [...new Set(blocked.map(([, ses]) => DateEngine.formatMonth(ses.month, true)))];
+    errorBox.textContent = months.join(', ') + (months.length === 1 ? ' still has ' : ' still have ') + blocked.length +
+      (blocked.length === 1 ? ' tile' : ' tiles') + '. Move or remove them first, then make it a break month.';
+    return false;
+  }
+  const todayDate = today().date;
+  const stamp = new Date().toISOString(), who = state.account.login;
+  const retimed = [];       // tiles following the pattern whose date or times change
+  const reflagged = [];     // hand-moved tiles that now match the new pattern exactly
+  Object.entries(state.plan.sessions).forEach(([key, ses]) => {
+    if (ses.date < todayDate || newBreaks.length && DateEngine.isBreakMonth(next, ses.month)) return;
+    const p = parseSessionKey(key);
+    const now = DateEngine.sessionDate(next, p.month, p.club, p.cat);
+    if (!now) return;
+    const same = now.date === ses.date && now.start === ses.start && now.end === ses.end;
+    if (!ses.moved && !same) retimed.push([key, ses, now]);
+    else if (ses.moved && same) reflagged.push([key, ses]);
+  });
+  let updateTiles = false;
+  if (retimed.length) {
+    const sample = retimed.slice(0, 4).map(([k, ses, now]) => groupName(ses.club, ses.category) + ' ' +
+      DateEngine.formatDayDate(ses.date) + ' → ' + DateEngine.formatDayDate(now.date) + ' ' + DateEngine.formatTime(now.start)).join('; ');
+    const answer = await ask('Update future tiles too?',
+      'This changes the usual date or times of ' + retimed.length + (retimed.length === 1 ? ' future tile' : ' future tiles') +
+      ' (' + sample + (retimed.length > 4 ? '; …' : '') + '). Update them to match? Past tiles and tiles you have moved by hand stay as they are. ' +
+      'Updated tiles lose any “Invitations sent” tick.',
+      [['cancel', 'Cancel'], ['settings', 'Settings only'], ['update', 'Update tiles too', 'btn-dark']]);
+    if (answer === 'cancel') return false;
+    updateTiles = answer === 'update';
+  }
+  const ops = [makeOp('settings', 'settings', before, next)];
+  if (updateTiles) retimed.forEach(([key, ses, now]) => {
+    const after = Object.assign({}, ses, { date: now.date, start: now.start, end: now.end, moved: false,
+      invitesSent: false, invitesSentAt: '', updatedAt: stamp, updatedBy: who });
+    ops.push(makeOp('session', key, ses, after));
+  });
+  reflagged.forEach(([key, ses]) => ops.push(makeOp('session', key, ses, Object.assign({}, ses, { moved: false, updatedAt: stamp, updatedBy: who }))));
+  commit(ops, label + (updateTiles ? ' (and ' + retimed.length + (retimed.length === 1 ? ' tile)' : ' tiles)') : ''));
+  toast('Settings saved' + (updateTiles ? ', with ' + retimed.length + (retimed.length === 1 ? ' tile' : ' tiles') + ' updated' : '') + '. Undo is on the Board page.');
+  return true;
+}
+
+/* --- Editing access and the key reminder ------------------------------------------
+   GitHub fine-grained keys expire (at most a year). The board reads the expiry
+   date from GitHub's reply when the browser is allowed to see it; if not, the
+   owner can type the date shown on GitHub once on each device. From 30 days
+   before, a reminder appears at the top of the page, once per visit.          */
+
+const KEY_WARN_DAYS = 30;
+
+/** The key's expiry as 'YYYY-MM-DD', from GitHub or typed in on this device, and where it came from. */
+function keyExpiry() {
+  if (state.account && state.account.expires && !isNaN(state.account.expires)) {
+    const d = state.account.expires;
+    return { date: DateEngine.isoDate(d.getFullYear(), d.getMonth() + 1, d.getDate()), source: 'github' };
+  }
+  const typed = storeGet(STORE.keyExpiry);
+  return DateEngine.parseDate(typed) ? { date: typed, source: 'typed' } : null;
+}
+
+/** Whole days from today to a 'YYYY-MM-DD' date (negative once passed). */
+function daysUntil(date) {
+  const a = DateEngine.parseDate(today().date), b = DateEngine.parseDate(date);
+  return Math.round((Date.UTC(b.year, b.month - 1, b.day) - Date.UTC(a.year, a.month - 1, a.day)) / 86400000);
+}
+
+/** Show the renewal reminder at the top of the page, once per visit, when the key is close to expiry. */
+function checkKeyReminder() {
+  if (!state.account || state.keyReminderShown) return;
+  const exp = keyExpiry();
+  if (!exp) return;
+  const days = daysUntil(exp.date);
+  if (days > KEY_WARN_DAYS) return;
+  state.keyReminderShown = true;
+  const when = DateEngine.formatDayDate(exp.date, true);
+  const text = days <= 0 ? 'Your editing key expired on ' + when + '. Renew it on GitHub, then paste the new key.'
+    : 'Your editing key expires in ' + days + (days === 1 ? ' day' : ' days') + ' (' + when + '). Renew it on GitHub now (Regenerate token), then paste the new key here.';
+  const box = el('div', { class: 'message', attrs: { 'data-tone': 'warn', 'data-key-reminder': '' } },
+    el('div', { class: 'message-text', text }),
+    el('a', { class: 'btn', href: KEY_SETTINGS_URL, target: '_blank', rel: 'noopener noreferrer' }, icon('open'), 'Renew key on GitHub'),
+    el('button', { type: 'button', class: 'btn', on: { click: () => { box.remove(); openUnlockDialog(false); } } }, 'Paste new key'),
+    el('button', { type: 'button', class: 'btn btn-quiet', on: { click: () => box.remove() } }, 'Later'));
+  document.getElementById('messages').append(box);
+}
+
+function renderAccessCard() {
   const acct = state.account;
   const access = el('section', { class: 'card' }, el('h2', { text: 'Editing access' }));
-  if (acct) {
-    const expiry = acct.expires
-      ? acct.expires.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-      : 'Not shown to the board. GitHub emails you a week before it expires.';
-    access.append(
-      el('dl', { class: 'kv' },
-        el('dt', { text: 'Unlocked as' }), el('dd', { text: acct.name + ' (' + acct.login + ')' }),
-        el('dt', { text: 'Role' }), el('dd', { text: acct.isOwner ? 'Owner — can use every feature' : 'Editor' }),
-        el('dt', { text: 'Key expires' }), el('dd', { text: expiry })),
-      el('p', { class: 'note', text: 'The key is remembered on this device only. To renew it, open your keys on GitHub, choose this key and press “Regenerate token”, then paste the new key here.' }),
-      el('div', { class: 'actions' },
-        el('a', { class: 'btn', href: KEY_SETTINGS_URL, target: '_blank', rel: 'noopener noreferrer' }, icon('open'), 'Renew key on GitHub'),
-        el('button', { type: 'button', class: 'btn', on: { click: () => openUnlockDialog(false) } }, 'Paste new key'),
-        el('button', { type: 'button', class: 'btn btn-danger-text', on: { click: removeKey } }, 'Remove key from this device')));
-  } else {
+  if (!acct) {
     access.append(
       el('p', { text: 'This device is view-only. Editors unlock it once with their GitHub access key.' }),
       el('div', { class: 'actions' },
         el('button', { type: 'button', class: 'btn btn-dark', on: { click: () => openUnlockDialog(false) } }, icon('lock'), 'Unlock editing')));
+    return access;
   }
+  const exp = keyExpiry();
+  const days = exp ? daysUntil(exp.date) : null;
+  const expiryText = exp
+    ? DateEngine.formatDayDate(exp.date, true) + (days <= 0 ? ' — expired' : ' — ' + days + (days === 1 ? ' day' : ' days') + ' left') +
+      (exp.source === 'typed' ? ' (typed in on this device)' : '')
+    : 'Not shown to the board by GitHub. Type it in below to get a reminder a month ahead.';
+  const expiryDd = el('dd', { text: expiryText });
+  if (exp && days <= KEY_WARN_DAYS) expiryDd.classList.add('warn-text');
+  access.append(
+    el('dl', { class: 'kv' },
+      el('dt', { text: 'Unlocked as' }), el('dd', { text: acct.name + ' (' + acct.login + ')' }),
+      el('dt', { text: 'Role' }), el('dd', { text: acct.isOwner ? 'Owner — can use every feature' : 'Editor' }),
+      el('dt', { text: 'Key expires' }), expiryDd));
+  if (!exp || exp.source === 'typed') {
+    // GitHub's reply did not say: let the owner record the date shown on GitHub's key page.
+    const input = el('input', { class: 'input', type: 'date', id: 'keyExpiryInput', value: exp ? exp.date : '' });
+    access.append(el('div', { class: 'inline-form' },
+      el('label', { class: 'field' }, 'Expiry date shown on GitHub (for this device)', input),
+      el('button', { type: 'button', class: 'btn', on: { click: () => {
+        if (input.value && !DateEngine.parseDate(input.value)) { toast('Please choose a date.'); return; }
+        if (input.value) storeSet(STORE.keyExpiry, input.value); else storeRemove(STORE.keyExpiry);
+        state.keyReminderShown = false;
+        document.querySelectorAll('[data-key-reminder]').forEach(n => n.remove());
+        checkKeyReminder();
+        renderSettings(true);
+        toast(input.value ? 'Expiry date saved on this device.' : 'Expiry date cleared.');
+      } } }, 'Save date')));
+  }
+  access.append(
+    el('p', { class: 'note', text: 'The key is remembered on this device only. To renew it, open your keys on GitHub, choose this key and press “Regenerate token”, then paste the new key here. A reminder appears at the top of the board from ' + KEY_WARN_DAYS + ' days before it expires.' }),
+    el('div', { class: 'actions' },
+      el('a', { class: 'btn', href: KEY_SETTINGS_URL, target: '_blank', rel: 'noopener noreferrer' }, icon('open'), 'Renew key on GitHub'),
+      el('button', { type: 'button', class: 'btn', on: { click: () => openUnlockDialog(false) } }, 'Paste new key'),
+      el('button', { type: 'button', class: 'btn btn-danger-text', on: { click: removeKey } }, 'Remove key from this device')));
+  return access;
+}
 
-  const pattern = el('section', { class: 'card' },
-    el('h2', { text: 'Meeting pattern' }),
-    el('p', { class: 'note', text: 'Shown for checking. Changing these here arrives in a later stage; until then they are edited in data/plan.json.' }),
-    el('table', { class: 'simple' },
-      el('thead', {}, el('tr', {}, el('th', { text: 'Club' }), el('th', { text: 'Code' }), el('th', { text: 'Meets on' }))),
-      el('tbody', {}, s.clubs.map(c => el('tr', {}, el('td', { text: c.name }), el('td', { text: c.code }), el('td', { text: c.meetingDay }))))),
-    el('h3', { text: 'Groups' }),
-    el('table', { class: 'simple' },
-      el('thead', {}, el('tr', {}, el('th', { text: 'Category' }), el('th', { text: 'Time' }), el('th', { text: 'Week' }))),
-      el('tbody', {}, s.categories.map(c => el('tr', {},
-        el('td', { text: c.name }),
-        el('td', { text: DateEngine.formatTime(c.start) + '–' + DateEngine.formatTime(c.end) }),
-        el('td', { text: Number(c.weekFromEnd) === 1 ? 'Last week of the month' : Number(c.weekFromEnd) === 2 ? 'Second-last week' : c.weekFromEnd + ' weeks from the end' }))))),
-    el('p', { class: 'note', text: s.weekRule === 'sameWeek'
-      ? 'Both clubs use the same two weeks, so Fornham always meets the day after Great Barton.'
-      : 'Each club meets in its own last two weeks of the month, so no meeting falls after the month end.' }),
-    el('h3', { text: 'Breaks' }),
-    el('p', { text: (s.breakMonths || []).map(m => DateEngine.MONTH_LONG[m - 1]).join(', ') || 'None' }),
-    el('h3', { text: 'Presenters' }),
-    el('p', { text: s.presenters.length ? s.presenters.map(p => p.code + ' — ' + p.name + (p.active === false ? ' (inactive)' : '')).join(', ') : 'None yet' }));
-
+function renderAboutCard() {
   const meta = state.plan.meta || {};
-  const about = el('section', { class: 'card' },
+  return el('section', { class: 'card' },
     el('h2', { text: 'About this plan' }),
     el('dl', { class: 'kv' },
       el('dt', { text: 'Last saved' }), el('dd', { text: meta.savedAt ? new Date(meta.savedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—' }),
       el('dt', { text: 'Saved by' }), el('dd', { text: meta.savedBy || '—' }),
       el('dt', { text: 'Topics / sessions' }), el('dd', { text: Object.keys(state.plan.topics).length + ' / ' + Object.keys(state.plan.sessions).length }),
       el('dt', { text: 'Repository' }), el('dd', {}, el('a', { href: 'https://github.com/' + REPO.owner + '/' + REPO.name, target: '_blank', rel: 'noopener noreferrer', text: REPO.owner + '/' + REPO.name }))));
-  box.replaceChildren(access, pattern, about);
 }
+
 
 /* --- The details panel ------------------------------------------------------------ */
 
@@ -2309,22 +2790,52 @@ function renderSessionEditor(session) {
         session.invitesSent && session.invitesSentAt
           ? el('span', { class: 'note', attrs: { style: 'font-weight:400' }, text: '(' + DateEngine.formatDayDate(session.invitesSentAt.slice(0, 10), true) + ')' })
           : null),
-      calendarButton(session)));
+      calendarButton(session, true)));
 }
 
 /* --- Add to calendar (Nice to Have 4) ----------------------------------------------
    A button that downloads a calendar entry (.ics file) for one placed session.
    The iPad opens it in Apple Calendar; a PC opens it in Outlook (or it can be
-   imported into Google Calendar). It always uses the session as last saved.     */
-function calendarButton(session) {
+   imported into Google Calendar).
+   In a read-only panel it uses the session as saved. In the editable panel
+   (fromForm) it uses the title, date and times currently in the boxes, even
+   if not yet saved (bug B2), checked with the same rules as Save.             */
+function calendarButton(session, fromForm) {
   if (!session || session.status === 'cancelled') return null;
   return el('button', { type: 'button', class: 'btn btn-outline-bronze', attrs: { style: 'align-self:flex-start' },
-    on: { click: () => downloadCalendarEntry(session) } }, icon('calendar'), 'Add to calendar');
+    on: { click: () => downloadCalendarEntry(session, fromForm) } }, icon('calendar'), 'Add to calendar');
+}
+
+/**
+ * The session as shown in the editable details panel: its saved copy with the
+ * title, date and times from the boxes. Returns null (and shows the problem
+ * under the boxes) if they would not pass Save's checks.
+ */
+function sessionFromForm(session) {
+  const val = id => (document.getElementById(id) || {}).value || '';
+  const date = val('fDate'), start = val('fStart'), end = val('fEnd'), title = val('fTitle').trim();
+  const pd = DateEngine.parseDate(date);
+  let problem = '';
+  if (!pd || DateEngine.monthKey(pd.year, pd.month) !== session.month) problem = 'The date must be in ' + DateEngine.formatMonth(session.month) + '.';
+  else if (!DateEngine.isTime(start) || !DateEngine.isTime(end)) problem = 'Please enter a start and end time.';
+  else if (end <= start) problem = 'The end time must be after the start time.';
+  if (!fieldError('fDate', 'eSession', problem)) return null;
+  return { session: Object.assign({}, session, { date, start, end }), title };
 }
 
 /** Build the .ics text for a session and hand it to the browser as a download. */
-function downloadCalendarEntry(session) {
-  const topic = state.plan.topics[session.topicId] || { title: 'Club session' };
+function downloadCalendarEntry(saved, fromForm) {
+  let session = saved, titleOverride = '', unsaved = false;
+  if (fromForm) {
+    const shown = sessionFromForm(saved);
+    if (!shown) return;
+    session = shown.session;
+    titleOverride = shown.title;
+    const topicNow = state.plan.topics[saved.topicId] || {};
+    unsaved = session.date !== saved.date || session.start !== saved.start || session.end !== saved.end ||
+      (titleOverride && titleOverride !== topicNow.title);
+  }
+  const topic = Object.assign({ title: 'Club session' }, state.plan.topics[session.topicId] || {}, titleOverride ? { title: titleOverride } : {});
   const club = clubOf(session.club);
   const group = groupName(session.club, session.category);
   const lines = [group + (club ? ' — ' + club.name : '')];
@@ -2350,7 +2861,8 @@ function downloadCalendarEntry(session) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
-  toast('Calendar entry downloaded. Open it to add it to your calendar.');
+  toast(unsaved ? 'Calendar entry made with the details shown. Remember to press Save.'
+    : 'Calendar entry downloaded. Open it to add it to your calendar.');
 }
 
 /** Links to the other sessions showing the same topic. */
@@ -3333,6 +3845,11 @@ async function confirmUnlock() {
     const problems = validatePlan(latest.data);
     if (problems.length) throw new Error(problems.join(' '));
     storeSet(STORE.key, key);
+    // A different key (a renewal) has its own expiry: forget a date typed in for the old one,
+    // and let the reminder be worked out afresh.
+    if (previousKey && previousKey !== key) storeRemove(STORE.keyExpiry);
+    state.keyReminderShown = false;
+    document.querySelectorAll('[data-key-reminder]').forEach(n => n.remove());
     state.account = account;
     state.remote = { sha: latest.sha, etag: latest.etag, data: withDefaults(latest.data) };
     state.lastLoaded = new Date();
@@ -3497,7 +4014,7 @@ function bindControls() {
   // "Leave site?" warning while changes are still unsaved. Browsers show their own
   // wording; setting returnValue is what asks them to show it.
   window.addEventListener('beforeunload', e => {
-    if (state.pending.length || state.saving) { e.preventDefault(); e.returnValue = ''; }
+    if (state.pending.length || state.saving || state.settingsDirty.size) { e.preventDefault(); e.returnValue = ''; }
   });
   // When the page comes back into view (for example the iPad wakes), check for news.
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshPlan(false); });
