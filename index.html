@@ -515,6 +515,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .set-group { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px 14px; margin: 0; }
 .set-group legend { font-weight: 700; font-size: 14px; color: var(--bronze-ink); padding: 0 6px; }
 .set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 10px 14px; }
+.set-grid-2 { grid-template-columns: minmax(10rem, 2fr) minmax(10.5rem, 1fr); margin-bottom: 10px; }
+.set-grid-times { grid-template-columns: repeat(4, minmax(8.5rem, 1fr)); }
 .set-grid-4 { grid-template-columns: minmax(9rem, 2fr) minmax(8.5rem, 1fr) minmax(8.5rem, 1fr) minmax(10.5rem, 1.4fr); }
 .months-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 0 12px; }
 .months-grid .check-row { font-weight: 400; }
@@ -536,7 +538,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .inline-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 10px; }
 .warn-text { color: var(--warn); font-weight: 700; }
 .message .btn-quiet { min-height: 36px; }
-@media (max-width: 760px) { .set-grid-4 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 760px) { .set-grid-4, .set-grid-times { grid-template-columns: 1fr 1fr; } }
 .danger-zone { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
 
 /* --- Fit the board to the iPad's width (Nice to Have 1) ----------------------
@@ -1035,14 +1037,26 @@ const DateEngine = (() => {
       if (day === undefined) return null;
     }
     const date = isoDate(p.year, p.month, day);
+    const times = groupTimes(settings, clubCode, categoryCode);
     const closure = (settings.closures || []).find(c => c.date === date && (!c.club || c.club === clubCode));
     return {
       date,
       weekday: DAY_SHORT[weekdayOf(p.year, p.month, day)],
-      start: cat.start,
-      end: cat.end,
+      start: times.start,
+      end: times.end,
       closure: closure ? (closure.note || 'Closed') : null
     };
+  }
+
+  /**
+   * The usual start and end times of one group (club + category). Nice to Have 8:
+   * settings.groupTimes may give a club its own times for a category, e.g.
+   * { FCC_WB: { start: '13:00', end: '14:30' } }; otherwise the category's times apply.
+   */
+  function groupTimes(settings, clubCode, categoryCode) {
+    const own = (settings.groupTimes || {})[clubCode + '_' + categoryCode];
+    const cat = (settings.categories || []).find(c => c.code === categoryCode) || {};
+    return own && own.start && own.end ? { start: own.start, end: own.end } : { start: cat.start, end: cat.end };
   }
 
   /** 'YYYY-MM-DD' -> 'Tue 19 Jan' (or 'Tue 19 Jan 2027' with year). No locale: always the same. */
@@ -1083,7 +1097,7 @@ const DateEngine = (() => {
 
   return {
     parseMonth, monthKey, addMonths, monthsBetween, daysInMonth, weekdayOf, isoDate, parseDate,
-    weekdayIndex, isBreakMonth, meetingWeeks, clubMeetingDays, sessionDate, formatDayDate, formatMonth, monthName,
+    weekdayIndex, isBreakMonth, meetingWeeks, clubMeetingDays, sessionDate, groupTimes, formatDayDate, formatMonth, monthName,
     formatTime, isTime, todayParts, MONTH_LONG
   };
 })();
@@ -2274,23 +2288,31 @@ const WEEK_CHOICES = [['2', 'Second-last week'], ['1', 'Last week']];
 function buildGroupsCard(editable) {
   const s = settings();
   const time = t => DateEngine.formatTime(t);
+  const span = (club, cat) => { const t = DateEngine.groupTimes(s, club, cat); return time(t.start) + '–' + time(t.end); };
   if (!editable) {
     return [
       el('table', { class: 'simple' },
-        el('thead', {}, el('tr', {}, el('th', { text: 'Category' }), el('th', { text: 'Time' }), el('th', { text: 'Week' }))),
-        el('tbody', {}, s.categories.map(c => el('tr', {}, el('td', { text: c.name }), el('td', { text: time(c.start) + '–' + time(c.end) }),
+        el('thead', {}, el('tr', {}, el('th', { text: 'Category' }), s.clubs.map(k => el('th', { text: k.code })), el('th', { text: 'Week' }))),
+        el('tbody', {}, s.categories.map(c => el('tr', {}, el('td', { text: c.name }),
+          s.clubs.map(k => el('td', { text: span(k.code, c.code) })),
           el('td', { text: (WEEK_CHOICES.find(w => w[0] === String(c.weekFromEnd)) || ['', c.weekFromEnd + ' weeks from the end'])[1] }))))),
       el('h3', { text: 'Group names' }),
       el('p', { text: s.clubs.flatMap(c => CATEGORY_ORDER.map(cat => groupName(c.code, cat))).join(' · ') })];
   }
+  const timeBox = (label, value, name) => el('label', { class: 'field' }, label,
+    el('input', { class: 'input', type: 'time', value, attrs: { 'data-f': name } }));
   return [
+    el('p', { class: 'note', text: 'Each club has its own usual times for each group. A single meeting at a different time is changed in that tile’s details instead.' }),
     s.categories.map(c => el('fieldset', { class: 'set-group', attrs: { 'data-cat': c.code } },
       el('legend', { text: c.code }),
-      el('div', { class: 'set-grid set-grid-4' },
+      el('div', { class: 'set-grid set-grid-2' },
         setInput('Name', c.name, { attrs: { 'data-f': 'name' } }),
-        el('label', { class: 'field' }, 'Starts', el('input', { class: 'input', type: 'time', value: c.start, attrs: { 'data-f': 'start' } })),
-        el('label', { class: 'field' }, 'Ends', el('input', { class: 'input', type: 'time', value: c.end, attrs: { 'data-f': 'end' } })),
-        setSelect('Meets in', String(c.weekFromEnd), WEEK_CHOICES, { attrs: { 'data-f': 'week' } })))),
+        setSelect('Meets in', String(c.weekFromEnd), WEEK_CHOICES, { attrs: { 'data-f': 'week' } })),
+      el('div', { class: 'set-grid set-grid-times' },
+        s.clubs.map(k => {
+          const t = DateEngine.groupTimes(s, k.code, c.code);
+          return [timeBox(k.code + ' starts', t.start, 'start_' + k.code), timeBox(k.code + ' ends', t.end, 'end_' + k.code)];
+        })))),
     el('h3', { text: 'Group names' }),
     el('p', { class: 'note', text: 'How each column’s group is named on tiles, in details and in commit messages.' }),
     el('div', { class: 'set-grid' },
@@ -2299,21 +2321,21 @@ function buildGroupsCard(editable) {
   ];
 }
 function collectGroupsCard(card, s) {
+  s.groupTimes = Object.assign({}, s.groupTimes);
   s.categories.forEach(c => {
     const box = card.querySelector('[data-cat="' + c.code + '"]');
     c.name = needText(fieldValue(box, 'name'), 'the ' + c.code + ' category name');
-    const start = fieldValue(box, 'start'), end = fieldValue(box, 'end');
-    if (!DateEngine.isTime(start) || !DateEngine.isTime(end)) throw new Error('Please give a start and end time for ' + c.name + '.');
-    if (end <= start) throw new Error(c.name + ' must end after it starts.');
-    c.start = start; c.end = end;
     c.weekFromEnd = Number(fieldValue(box, 'week'));
-  });
-  // Beginners and Main of the same platform share a week but must not overlap in time.
-  ['Windows', 'iPad'].forEach(pl => {
-    const cats = s.categories.filter(c => c.platform === pl);
-    if (cats.length === 2 && cats[0].weekFromEnd === cats[1].weekFromEnd && cats[0].start < cats[1].end && cats[1].start < cats[0].end) {
-      throw new Error(cats[0].name + ' and ' + cats[1].name + ' meet in the same week and their times overlap.');
-    }
+    s.clubs.forEach((k, i) => {
+      const start = fieldValue(box, 'start_' + k.code), end = fieldValue(box, 'end_' + k.code);
+      if (!DateEngine.isTime(start) || !DateEngine.isTime(end)) throw new Error('Please give a start and end time for ' + k.code + ' ' + c.name + '.');
+      if (end <= start) throw new Error(k.code + ' ' + c.name + ' must end after it starts.');
+      // Every group's own times are stored (Nice to Have 8); the first club's also
+      // stay on the category, so anything reading the category alone gets sensible times.
+      // Overlaps between Beginners and Main are allowed (decided 17 Oct 2026).
+      s.groupTimes[k.code + '_' + c.code] = { start, end };
+      if (i === 0) { c.start = start; c.end = end; }
+    });
   });
   s.groupNames = Object.assign({}, s.groupNames);
   s.clubs.forEach(c => CATEGORY_ORDER.forEach(cat => {
@@ -2491,7 +2513,7 @@ async function applySettingsChange(next, label, errorBox) {
     const answer = await ask('Update future tiles too?',
       'This changes the usual date or times of ' + retimed.length + (retimed.length === 1 ? ' future tile' : ' future tiles') +
       ' (' + sample + (retimed.length > 4 ? '; …' : '') + '). Update them to match? Past tiles and tiles you have moved by hand stay as they are. ' +
-      'Updated tiles lose any “Invitations sent” tick.',
+      'Updated tiles lose any “Invitations sent” tick. With “Settings only” those tiles keep their date and times and are marked “Moved”.',
       [['cancel', 'Cancel'], ['settings', 'Settings only'], ['update', 'Update tiles too', 'btn-dark']]);
     if (answer === 'cancel') return false;
     updateTiles = answer === 'update';
@@ -2502,6 +2524,11 @@ async function applySettingsChange(next, label, errorBox) {
       invitesSent: false, invitesSentAt: '', updatedAt: stamp, updatedBy: who });
     ops.push(makeOp('session', key, ses, after));
   });
+  // "Settings only": the tiles keep their date and times, which now differ from the usual
+  // ones, so they are marked Moved (as a tile edited by hand would be). That also stops
+  // them being offered again at every later settings change.
+  if (!updateTiles) retimed.forEach(([key, ses]) =>
+    ops.push(makeOp('session', key, ses, Object.assign({}, ses, { moved: true, updatedAt: stamp, updatedBy: who }))));
   reflagged.forEach(([key, ses]) => ops.push(makeOp('session', key, ses, Object.assign({}, ses, { moved: false, updatedAt: stamp, updatedBy: who }))));
   commit(ops, label + (updateTiles ? ' (and ' + retimed.length + (retimed.length === 1 ? ' tile)' : ' tiles)') : ''));
   toast('Settings saved' + (updateTiles ? ', with ' + retimed.length + (retimed.length === 1 ? ' tile' : ' tiles') + ' updated' : '') + '. Undo is on the Board page.');
