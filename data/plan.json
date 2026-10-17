@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-17T10:59:56.370Z",
+    "savedAt": "2026-10-17T11:00:09.660Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -126,17 +126,6 @@
     "firstMonth": "2027-01"
   },
   "topics": {
-    "t_d68y9084": {
-      "title": "Drop IN Session",
-      "category": "EV",
-      "presenter": "BG",
-      "notesUrl": "",
-      "slidesUrl": "",
-      "briefing": "",
-      "invitesSent": false,
-      "updatedAt": "2026-10-16T13:55:07.357Z",
-      "updatedBy": "bernieonline"
-    },
     "t_eeejkib2": {
       "title": "Latest AI Features",
       "category": "EV",
@@ -185,60 +174,6 @@
     }
   },
   "sessions": {
-    "2026-10_FCC_WB": {
-      "topicId": "t_d68y9084",
-      "club": "FCC",
-      "category": "WB",
-      "month": "2026-10",
-      "date": "2026-10-20",
-      "start": "14:00",
-      "end": "16:00",
-      "status": "planned",
-      "moved": true,
-      "updatedAt": "2026-10-16T14:44:56.824Z",
-      "updatedBy": "bernieonline"
-    },
-    "2026-10_GBCC_WB": {
-      "topicId": "t_d68y9084",
-      "club": "GBCC",
-      "category": "WB",
-      "month": "2026-10",
-      "date": "2026-10-19",
-      "start": "14:00",
-      "end": "16:00",
-      "status": "planned",
-      "moved": true,
-      "updatedAt": "2026-10-17T10:58:20.506Z",
-      "updatedBy": "bernieonline",
-      "invitesSent": true,
-      "invitesSentAt": "2026-10-17T10:58:20.506Z"
-    },
-    "2026-10_GBCC_WM": {
-      "topicId": "t_d68y9084",
-      "club": "GBCC",
-      "category": "WM",
-      "month": "2026-10",
-      "date": "2026-10-19",
-      "start": "14:00",
-      "end": "16:00",
-      "status": "planned",
-      "moved": false,
-      "updatedAt": "2026-10-16T14:45:14.964Z",
-      "updatedBy": "bernieonline"
-    },
-    "2026-10_FCC_WM": {
-      "topicId": "t_d68y9084",
-      "club": "FCC",
-      "category": "WM",
-      "month": "2026-10",
-      "date": "2026-10-20",
-      "start": "14:00",
-      "end": "16:00",
-      "status": "planned",
-      "moved": false,
-      "updatedAt": "2026-10-16T14:48:54.796Z",
-      "updatedBy": "bernieonline"
-    },
     "2026-10_GBCC_IB": {
       "topicId": "t_eeejkib2",
       "club": "GBCC",
