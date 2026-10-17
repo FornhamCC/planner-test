@@ -17,6 +17,11 @@
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
+<!-- Nice to Have 4: stop iPad Safari turning dates (and anything that looks like a
+     phone number, address or email) into links. Its own long-press menu for those
+     links clashed with the board's press-and-hold on tiles. The board's own
+     "Add to calendar" button in a tile's details does the useful part instead. -->
+<meta name="format-detection" content="date=no, telephone=no, address=no, email=no">
 <title>Topic Planning Board</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23B8956A'/%3E%3Cpath d='M6 8h12M6 12h12M6 16h7' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
 
@@ -349,7 +354,7 @@ dialog::backdrop { background: rgba(28,27,25,.45); }
 .dlg-head h2 { margin: 0; font-size: 20px; flex: 1; }
 .dlg-body { padding: 6px 20px 16px; display: flex; flex-direction: column; gap: 14px; }
 .dlg-foot { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.dlg-foot .right { margin-left: auto; display: flex; gap: 8px; }
+.dlg-foot .right { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .field { display: flex; flex-direction: column; gap: 5px; font-size: 14px; font-weight: 700; color: var(--ink-2); }
 .field .help { font-weight: 400; color: var(--muted); font-size: 13px; }
 .field .error { font-weight: 700; color: var(--danger); font-size: 13px; }
@@ -1052,6 +1057,85 @@ const DateEngine = (() => {
   };
 })();
 /* DATE-ENGINE-END */
+
+
+/* =====================================================================
+   4b. CALENDAR FILE (Nice to Have 4)
+   Builds the text of an iCalendar (.ics) file for one session: the format
+   Apple Calendar, Outlook and Google Calendar all read (RFC 5545).
+   Pure: no page, no clock (the time stamp is passed in).
+   - Times are written as UK local times with TZID=Europe/London, and the
+     file carries a VTIMEZONE block describing British Summer Time (last
+     Sunday of March to last Sunday of October), so a 12:30 meeting stays at
+     12:30 in either season and on a device set to another time zone.
+   - Lines end with CRLF and are folded at 75 bytes, as the standard requires;
+     commas, semicolons, backslashes and new lines in text are escaped.
+   ===================================================================== */
+/* CALENDAR-FILE-START */
+const CalendarFile = (() => {
+  const TIMEZONE = [
+    'BEGIN:VTIMEZONE', 'TZID:Europe/London',
+    'BEGIN:DAYLIGHT', 'TZOFFSETFROM:+0000', 'TZOFFSETTO:+0100', 'TZNAME:BST',
+    'DTSTART:19700329T010000', 'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU', 'END:DAYLIGHT',
+    'BEGIN:STANDARD', 'TZOFFSETFROM:+0100', 'TZOFFSETTO:+0000', 'TZNAME:GMT',
+    'DTSTART:19701025T020000', 'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU', 'END:STANDARD',
+    'END:VTIMEZONE'
+  ];
+
+  /** Escape text for a TEXT value: \ ; , and new lines (RFC 5545 section 3.3.11). */
+  function escapeText(text) {
+    return String(text || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  }
+
+  /**
+   * Fold one line into pieces of at most 75 bytes (UTF-8), each continuation
+   * starting with a space. Counting bytes, not characters, matters for text
+   * such as "café" or curly quotes; a character is never split in two.
+   */
+  function fold(line) {
+    const enc = new TextEncoder();
+    const out = [];
+    let current = '', bytes = 0;
+    for (const ch of line) {                       // for…of walks whole characters
+      const n = enc.encode(ch).length;
+      const limit = out.length ? 74 : 75;          // continuation lines lose a byte to the leading space
+      if (bytes + n > limit) { out.push(current); current = ''; bytes = 0; }
+      current += ch; bytes += n;
+    }
+    out.push(current);
+    return out.map((part, i) => (i ? ' ' : '') + part).join('\r\n');
+  }
+
+  /** '2027-01-25' + '12:30' -> '20270125T123000' (local time, no Z). */
+  function localStamp(date, time) { return date.replace(/-/g, '') + 'T' + time.replace(':', '') + '00'; }
+
+  /** A Date -> '20261017T103000Z' in UTC, for DTSTAMP. */
+  function utcStamp(d) { return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); }
+
+  /**
+   * The whole file. event: { uid, date 'YYYY-MM-DD', start 'HH:MM', end 'HH:MM',
+   * title, description, stamp (a Date) }.
+   */
+  function build(event) {
+    const lines = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//FornhamCC//Topic Planning Board//EN',
+      'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+      ...TIMEZONE,
+      'BEGIN:VEVENT',
+      'UID:' + event.uid,
+      'DTSTAMP:' + utcStamp(event.stamp),
+      'DTSTART;TZID=Europe/London:' + localStamp(event.date, event.start),
+      'DTEND;TZID=Europe/London:' + localStamp(event.date, event.end),
+      'SUMMARY:' + escapeText(event.title),
+      event.description ? 'DESCRIPTION:' + escapeText(event.description) : null,
+      'END:VEVENT', 'END:VCALENDAR'
+    ].filter(Boolean);
+    return lines.map(fold).join('\r\n') + '\r\n';
+  }
+
+  return { build, escapeText, fold };
+})();
+/* CALENDAR-FILE-END */
 
 
 /* =====================================================================
@@ -1791,7 +1875,8 @@ function renderTile(sKey, session, col) {
     topic.category === CLUB_EVENT ? el('span', { class: 'chip chip-event', text: cat.name }) : null,
     cancelled ? el('span', { class: 'chip chip-cancelled', text: 'Cancelled' }) : null,
     session.moved ? el('span', { class: 'chip chip-moved', text: 'Moved' }) : null,
-    topic.invitesSent ? el('span', { class: 'chip chip-invites', title: 'Invitations sent to members' }, icon('check'), 'Invites sent') : null,
+    // Bug B1: the tick belongs to this tile (one email group, one meeting), not the topic.
+    session.invitesSent ? el('span', { class: 'chip chip-invites', title: 'Invitations sent to ' + groupName(session.club, session.category) }, icon('check'), 'Invites sent') : null,
     topic.notesUrl ? el('span', { title: 'Tutorial notes linked' }, icon('clip')) : null,
     topic.briefing ? el('span', { title: 'Members’ briefing written' }, icon('doc')) : null));
 }
@@ -1906,7 +1991,19 @@ function renderTrayCard(id, topic, placement) {
     topic.presenter ? el('span', { class: 'pres', text: topic.presenter, title: presenterName(topic.presenter) }) : null),
   el('span', { class: 'cat', text: cat ? cat.name : '' }),
   el('div', { class: 'badges' }, badges,
-    topic.invitesSent ? el('span', { class: 'badge placed', text: '✓ Invites sent' }) : null));
+    invitesBadge(id)));
+}
+
+/**
+ * Tray badge counting the topic's tiles whose invitations have gone out,
+ * e.g. "Invites 1 of 2". Nothing is shown until at least one tile is ticked;
+ * it turns green once every tile is ticked.
+ */
+function invitesBadge(topicId) {
+  const tiles = sessionsOfTopic(topicId).filter(([, s]) => s.status !== 'cancelled');
+  const sent = tiles.filter(([, s]) => s.invitesSent).length;
+  if (!sent) return null;
+  return el('span', { class: 'badge' + (sent === tiles.length ? ' placed' : ''), text: '✓ Invites ' + sent + ' of ' + tiles.length });
 }
 
 /* --- The placing strip ------------------------------------------------------------ */
@@ -2129,13 +2226,6 @@ function renderDetails() {
         el('label', { class: 'field' }, 'Category', catSelect,
           catOptions.length === 1 ? el('span', { class: 'help', text: 'Placed in more than one kind of group, so it stays a club event.' }) : null),
         el('label', { class: 'field' }, 'Presenter', presSelect)),
-      // Nice to Have 2: one tick per topic, shown on every tile of the topic.
-      el('label', { class: 'check-row' },
-        el('input', { type: 'checkbox', id: 'fInvites', checked: !!topic.invitesSent }),
-        el('span', { text: 'Invitations sent to members' }),
-        topic.invitesSent && topic.invitesSentAt
-          ? el('span', { class: 'note', attrs: { style: 'font-weight:400' }, text: '(' + DateEngine.formatDayDate(topic.invitesSentAt.slice(0, 10), true) + ')' })
-          : null),
       session ? renderSessionEditor(session) : null,
       others.length ? el('p', { class: 'also' }, session ? 'Also placed at: ' : 'Placed at: ', alsoLinks(others))
         : (!session ? el('p', { class: 'also', text: 'Not placed on the board yet.' }) : null),
@@ -2167,9 +2257,10 @@ function renderDetails() {
           el('div', { text: groupName(session.club, session.category) }),
           el('div', { attrs: { style: 'font-size:18px;font-weight:700' }, text: DateEngine.formatDayDate(session.date, true) + ', ' +
             DateEngine.formatTime(session.start) + '–' + DateEngine.formatTime(session.end) }),
-          session.moved ? el('span', { class: 'chip chip-moved', attrs: { style: 'align-self:flex-start' }, text: 'Moved from the usual date or time' }) : null)) : null,
+          session.moved ? el('span', { class: 'chip chip-moved', attrs: { style: 'align-self:flex-start' }, text: 'Moved from the usual date or time' }) : null,
+          session.invitesSent ? el('span', { class: 'chip chip-invites', attrs: { style: 'align-self:flex-start;font-size:14px;padding:3px 8px' } }, icon('check'), 'Invitations sent to this group') : null,
+          calendarButton(session))) : null,
       topic.presenter ? el('p', { attrs: { style: 'margin:0' } }, 'Presenter: ', el('strong', { text: presenterName(topic.presenter) })) : null,
-      topic.invitesSent ? el('span', { class: 'chip chip-invites', attrs: { style: 'align-self:flex-start;font-size:14px;padding:3px 8px' } }, icon('check'), 'Invitations sent to members') : null,
       others.length ? el('p', { class: 'also' }, session ? 'Also at: ' : 'At: ', alsoLinks(others)) : null,
       (topic.notesUrl || topic.slidesUrl) ? el('section', { class: 'sheet-section' },
         el('h3', { text: 'Tutorial materials' }),
@@ -2209,7 +2300,57 @@ function renderSessionEditor(session) {
             min: session.month + '-01', max: session.month + '-' + String(dim).padStart(2, '0') })),
         el('label', { class: 'field' }, 'Start', el('input', { class: 'input', type: 'time', id: 'fStart', value: session.start })),
         el('label', { class: 'field' }, 'End', el('input', { class: 'input', type: 'time', id: 'fEnd', value: session.end }))),
-      el('span', { class: 'error', id: 'eSession' })));
+      el('span', { class: 'error', id: 'eSession' }),
+      // Bug B1: one tick per tile, because each tile is a separate email group.
+      // Moving the tile to another date clears it (the invitation named the old date).
+      el('label', { class: 'check-row' },
+        el('input', { type: 'checkbox', id: 'fInvites', checked: !!session.invitesSent }),
+        el('span', { text: 'Invitations sent to ' + groupName(session.club, session.category) }),
+        session.invitesSent && session.invitesSentAt
+          ? el('span', { class: 'note', attrs: { style: 'font-weight:400' }, text: '(' + DateEngine.formatDayDate(session.invitesSentAt.slice(0, 10), true) + ')' })
+          : null),
+      calendarButton(session)));
+}
+
+/* --- Add to calendar (Nice to Have 4) ----------------------------------------------
+   A button that downloads a calendar entry (.ics file) for one placed session.
+   The iPad opens it in Apple Calendar; a PC opens it in Outlook (or it can be
+   imported into Google Calendar). It always uses the session as last saved.     */
+function calendarButton(session) {
+  if (!session || session.status === 'cancelled') return null;
+  return el('button', { type: 'button', class: 'btn btn-outline-bronze', attrs: { style: 'align-self:flex-start' },
+    on: { click: () => downloadCalendarEntry(session) } }, icon('calendar'), 'Add to calendar');
+}
+
+/** Build the .ics text for a session and hand it to the browser as a download. */
+function downloadCalendarEntry(session) {
+  const topic = state.plan.topics[session.topicId] || { title: 'Club session' };
+  const club = clubOf(session.club);
+  const group = groupName(session.club, session.category);
+  const lines = [group + (club ? ' — ' + club.name : '')];
+  if (topic.presenter) lines.push('Presenter: ' + presenterName(topic.presenter));
+  if (isSafeUrl(topic.notesUrl)) lines.push('Tutorial notes: ' + topic.notesUrl);
+  if (isSafeUrl(topic.slidesUrl)) lines.push('Slides: ' + topic.slidesUrl);
+  const text = CalendarFile.build({
+    uid: sessionKey(session.month, session.club, session.category) + '@fornhamcc.github.io',
+    date: session.date, start: session.start, end: session.end,
+    title: topic.title + ' (' + group + ')',
+    description: lines.join('\n'),
+    stamp: new Date()
+  });
+  // A Blob is an in-memory file; URL.createObjectURL gives it a temporary
+  // address. An <a download> link to that address makes the browser save it as
+  // a file with the given name instead of opening it. The address is released
+  // a minute later, once the browser has finished with it.
+  const blob = new Blob([text], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const name = (session.date + ' ' + group + ' - ' + topic.title).replace(/[^A-Za-z0-9 ._-]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 100) + '.ics';
+  const a = el('a', { href: url, download: name, attrs: { hidden: true } });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  toast('Calendar entry downloaded. Open it to add it to your calendar.');
 }
 
 /** Links to the other sessions showing the same topic. */
@@ -2587,8 +2728,12 @@ async function moveSession(fromKey, toKey) {
   if (!occupant) offerMovePartner(moving, fromKey, toKey);
   render();
   const now = state.plan.sessions[toKey];
+  // A moved or swapped tile is a fresh session (see newSession), so any
+  // "Invitations sent" tick is cleared: the invitation named the old date.
+  const tickCleared = moving.invitesSent || (occupant && occupant.invitesSent);
   toast((occupant ? 'Swapped. ' : 'Moved to ') + (occupant ? '' : DateEngine.formatDayDate(now.date) + '.') +
-    (moving.moved ? ' Its date and times now follow the meeting pattern.' : ''));
+    (moving.moved ? ' Its date and times now follow the meeting pattern.' : '') +
+    (tickCleared ? ' The “Invitations sent” tick was cleared, as the date changed.' : ''));
 }
 
 /**
@@ -2677,18 +2822,54 @@ function removeSession(key) {
   toast('Removed from the board. The topic is still in the tray; Undo puts it back.');
 }
 
-/** Delete a topic and every tile showing it, after asking. */
+/**
+ * Delete a topic, after asking (Nice to Have 5: keep the past).
+ * - No tiles before today: one question, then the topic and all its tiles go.
+ * - Some tiles before today: those are the record of what was taught, so the
+ *   question offers "Remove future tiles only" (the topic and its past tiles
+ *   stay, and the topic leaves the Upcoming tray once its dates pass) as well
+ *   as "Delete everything" (for a topic made by mistake).
+ * Whichever is chosen is one action: saved together and undone together.
+ * A session dated today counts as upcoming.
+ */
 async function deleteTopic(topicId) {
   const topic = state.plan.topics[topicId];
   if (!topic) return;
   const placed = sessionsOfTopic(topicId);
-  const answer = await ask('Delete “' + topic.title + '”?',
-    placed.length
-      ? 'This deletes the topic and removes its ' + placed.length + (placed.length === 1 ? ' tile' : ' tiles') + ' from the board (' +
-        placed.map(([k]) => describeSession(k)).join('; ') + '). Undo can bring it back.'
-      : 'This deletes the topic from the tray. Undo can bring it back.',
-    [['cancel', 'Cancel'], ['delete', 'Delete', 'btn-dark']]);
-  if (answer !== 'delete') return;
+  const todayDate = today().date;
+  const past = placed.filter(([, s]) => s.date < todayDate);
+  const future = placed.filter(([, s]) => s.date >= todayDate);
+  const list = items => items.map(([k, s]) => groupName(s.club, s.category) + ' ' + DateEngine.formatDayDate(s.date, true)).join('; ');
+  const tiles = n => n + (n === 1 ? ' tile' : ' tiles');
+  let answer;
+  if (!past.length) {
+    answer = await ask('Delete “' + topic.title + '”?',
+      placed.length
+        ? 'This deletes the topic and removes its ' + tiles(placed.length) + ' from the board (' +
+          placed.map(([k]) => describeSession(k)).join('; ') + '). Undo can bring it back.'
+        : 'This deletes the topic from the tray. Undo can bring it back.',
+      [['cancel', 'Cancel'], ['everything', 'Delete', 'btn-dark']]);
+  } else if (!future.length) {
+    answer = await ask('Delete “' + topic.title + '”?',
+      'All its sessions have already taken place (' + list(past) + '). They are the record of what was taught. ' +
+      'You do not need to delete it: it no longer shows in the Upcoming list. Delete it only if it was made by mistake.',
+      [['cancel', 'Keep it'], ['everything', 'Delete everything', 'btn-danger-text']]);
+  } else {
+    answer = await ask('Keep the past sessions?',
+      '“' + topic.title + '” has already been taught (' + list(past) + '). ' +
+      'Remove future tiles only keeps the topic and those past sessions as the record, and takes its ' + tiles(future.length) +
+      ' off the board (' + list(future) + '). Delete everything removes the topic and all its tiles.',
+      [['cancel', 'Cancel'], ['everything', 'Delete everything', 'btn-danger-text'], ['future', 'Remove future tiles only', 'btn-dark']]);
+  }
+  if (answer === 'future') {
+    commit(future.map(([k, s]) => makeOp('session', k, s, null)), 'Remove future tiles of “' + topic.title + '”');
+    if (state.details && future.some(([k]) => k === state.details.key)) closeDetails();
+    state.pick = null; state.prompt = null;
+    render();
+    toast('Removed ' + tiles(future.length) + '. The past sessions of “' + topic.title + '” are kept.');
+    return;
+  }
+  if (answer !== 'everything') return;
   const ops = placed.map(([k, s]) => makeOp('session', k, s, null));
   ops.push(makeOp('topic', topicId, topic, null));
   commit(ops, 'Delete topic “' + topic.title + '”');
@@ -2741,7 +2922,7 @@ function confirmNewTopic() {
   const topic = {
     title, category: document.getElementById('ntCategory').value,
     presenter: document.getElementById('ntPresenter').value,
-    notesUrl: '', slidesUrl: '', briefing: '', invitesSent: false,
+    notesUrl: '', slidesUrl: '', briefing: '',
     updatedAt: new Date().toISOString(), updatedBy: state.account.login
   };
   const cellKey = dlg.dataset.cell;
@@ -2785,9 +2966,11 @@ function ask(title, text, buttons) {
     dlg.returnValue = 'cancel';
     dlg.addEventListener('close', () => resolve(dlg.returnValue || 'cancel'), { once: true });
     dlg.showModal();
-    // Focus the last (main) button so Enter confirms.
-    const btns = dlg.querySelectorAll('#askButtons button');
-    if (btns.length) btns[btns.length - 1].focus();
+    // Focus the main (dark) button so Enter confirms it. Where there is none,
+    // as when the only other choice is "Delete everything", focus the first,
+    // safe button, so Enter can never delete by accident.
+    const main = dlg.querySelector('#askButtons .btn-dark') || dlg.querySelector('#askButtons button');
+    if (main) main.focus();
   });
 }
 
@@ -3067,33 +3250,45 @@ function saveDetails() {
 
   // Topic: compare the editable fields with the copy taken when the panel opened.
   const tBefore = d.topicBefore || {};
-  const invites = document.getElementById('fInvites').checked;
   const tAfter = Object.assign({}, tBefore, {
     title,
     category: val('fCategory'),
     presenter: val('fPresenter'),
     notesUrl, slidesUrl,
-    briefing: val('fBriefing').replace(/\r\n/g, '\n').trimEnd(),
-    invitesSent: invites,
-    // Remember when the tick was first set; clearing the tick clears the date.
-    invitesSentAt: invites ? (tBefore.invitesSent ? (tBefore.invitesSentAt || stamp) : stamp) : ''
+    briefing: val('fBriefing').replace(/\r\n/g, '\n').trimEnd()
   });
-  const topicFields = ['title', 'category', 'presenter', 'notesUrl', 'slidesUrl', 'briefing', 'invitesSent'];
-  if (topicFields.some(f => (tBefore[f] || '') !== (tAfter[f] || ''))) {
+  // Bug B1: the invitations tick now lives on each session. Ticks left on a
+  // topic by the first Stage 2 test version are ignored, and dropped here the
+  // next time the topic is saved for any other reason.
+  delete tAfter.invitesSent;
+  delete tAfter.invitesSentAt;
+  const topicFields = ['title', 'category', 'presenter', 'notesUrl', 'slidesUrl', 'briefing'];
+  const topicChanged = topicFields.filter(f => (tBefore[f] || '') !== (tAfter[f] || ''));
+  if (topicChanged.length) {
     tAfter.updatedAt = stamp; tAfter.updatedBy = who;
     ops.push(makeOp('topic', d.topicId, d.topicBefore, tAfter));
   }
 
   // Session: 'moved' is true whenever the date or times differ from the meeting pattern.
+  let sessionChanged = [], invites = false, tickCleared = false;
   if (d.key) {
     const sBefore = d.sessionBefore;
     const pattern = DateEngine.sessionDate(settings(), p.month, p.club, p.cat);
+    invites = document.getElementById('fInvites').checked;
+    // A changed date makes the invitation already sent out of date, so a tick
+    // carried over untouched is cleared. Ticking it during this same edit
+    // (invitations re-sent for the new date) keeps it.
+    if (invites && sBefore.invitesSent && date !== sBefore.date) { invites = false; tickCleared = true; }
     const sAfter = Object.assign({}, sBefore, {
       date, start, end,
       status: val('fStatus'),
-      moved: !pattern || pattern.date !== date || pattern.start !== start || pattern.end !== end
+      moved: !pattern || pattern.date !== date || pattern.start !== start || pattern.end !== end,
+      invitesSent: invites,
+      // Remember when the tick was first set; clearing the tick clears the date.
+      invitesSentAt: invites ? (sBefore.invitesSent ? (sBefore.invitesSentAt || stamp) : stamp) : ''
     });
-    if (['date', 'start', 'end', 'status', 'moved'].some(f => sBefore[f] !== sAfter[f])) {
+    sessionChanged = ['date', 'start', 'end', 'status', 'moved', 'invitesSent'].filter(f => (sBefore[f] || false) !== (sAfter[f] || false));
+    if (sessionChanged.length) {
       sAfter.updatedAt = stamp; sAfter.updatedBy = who;
       ops.push(makeOp('session', d.key, sBefore, sAfter));
     }
@@ -3101,12 +3296,12 @@ function saveDetails() {
 
   closeDetails();
   if (!ops.length) return;
-  const onlyInvites = ops.length === 1 && ops[0].kind === 'topic' &&
-    topicFields.filter(f => (tBefore[f] || '') !== (tAfter[f] || '')).join() === 'invitesSent';
-  const label = onlyInvites ? (invites ? 'Tick' : 'Untick') + ' invitations sent for “' + title + '”'
-    : ops.some(o => o.kind === 'session') && ops.length === 1 ? 'Change ' + describeSession(d.key) + ' session'
+  const onlyInvites = !topicChanged.length && sessionChanged.join() === 'invitesSent';
+  const label = onlyInvites ? (invites ? 'Tick' : 'Untick') + ' invitations sent for “' + title + '” at ' + describeSession(d.key)
+    : !topicChanged.length ? 'Change ' + describeSession(d.key) + ' session'
     : 'Edit topic “' + title + '”';
   commit(ops, label);
+  if (tickCleared) { toast('Saved. The date changed, so its “Invitations sent” tick was cleared.'); return; }
   toast('Saved on this device — sending to GitHub…');
 }
 
