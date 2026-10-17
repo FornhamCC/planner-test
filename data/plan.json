@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-17T11:30:28.402Z",
+    "savedAt": "2026-10-17T11:30:53.501Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -146,6 +146,16 @@
       "invitesSent": false,
       "updatedAt": "2026-10-16T16:09:32.069Z",
       "updatedBy": "bernieonline"
+    },
+    "t_sxsdjefb": {
+      "title": "GBCC test 3",
+      "category": "EV",
+      "presenter": "",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-10-17T11:30:51.492Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -160,6 +170,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-10-17T11:29:12.581Z",
+      "updatedBy": "bernieonline"
+    },
+    "2026-11_GBCC_IM": {
+      "topicId": "t_sxsdjefb",
+      "club": "GBCC",
+      "category": "IM",
+      "month": "2026-11",
+      "date": "2026-11-30",
+      "start": "14:00",
+      "end": "16:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-10-17T11:30:51.493Z",
       "updatedBy": "bernieonline"
     }
   }
