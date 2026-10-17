@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-17T11:02:45.996Z",
+    "savedAt": "2026-10-17T11:03:25.158Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -159,16 +159,6 @@
       "invitesSent": false,
       "updatedAt": "2026-10-16T16:09:32.069Z",
       "updatedBy": "bernieonline"
-    },
-    "t_dcygr32o": {
-      "title": "Detente me",
-      "category": "WB",
-      "presenter": "",
-      "notesUrl": "",
-      "slidesUrl": "",
-      "briefing": "",
-      "updatedAt": "2026-10-17T11:02:43.991Z",
-      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -248,19 +238,6 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-10-16T17:16:36.501Z",
-      "updatedBy": "bernieonline"
-    },
-    "2026-10_GBCC_WB": {
-      "topicId": "t_dcygr32o",
-      "club": "GBCC",
-      "category": "WB",
-      "month": "2026-10",
-      "date": "2026-10-19",
-      "start": "12:30",
-      "end": "14:00",
-      "status": "planned",
-      "moved": false,
-      "updatedAt": "2026-10-17T11:02:43.991Z",
       "updatedBy": "bernieonline"
     }
   }
