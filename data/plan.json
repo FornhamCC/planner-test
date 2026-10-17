@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-17T11:29:14.592Z",
+    "savedAt": "2026-10-17T11:29:32.612Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -127,14 +127,13 @@
   },
   "topics": {
     "t_ns7ljv4c": {
-      "title": "GBCC AGM",
+      "title": "GBCC AGM 2",
       "category": "EV",
       "presenter": "",
       "notesUrl": "",
       "slidesUrl": "",
       "briefing": "",
-      "invitesSent": false,
-      "updatedAt": "2026-10-16T14:58:15.898Z",
+      "updatedAt": "2026-10-17T11:29:30.606Z",
       "updatedBy": "bernieonline"
     },
     "t_odd3rs20": {
