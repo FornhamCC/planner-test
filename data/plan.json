@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-17T13:29:06.373Z",
+    "savedAt": "2026-10-17T13:29:39.803Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -54,7 +54,7 @@
         "code": "IB",
         "name": "iPad Beginners",
         "platform": "iPad",
-        "start": "12:30",
+        "start": "12:45",
         "end": "14:00",
         "weekFromEnd": 1,
         "colours": {
@@ -175,12 +175,14 @@
       "category": "IB",
       "month": "2026-11",
       "date": "2026-11-24",
-      "start": "12:30",
+      "start": "12:45",
       "end": "14:00",
       "status": "planned",
       "moved": false,
-      "updatedAt": "2026-10-17T11:31:32.122Z",
-      "updatedBy": "bernieonline"
+      "updatedAt": "2026-10-17T13:29:35.703Z",
+      "updatedBy": "bernieonline",
+      "invitesSent": false,
+      "invitesSentAt": ""
     },
     "2026-11_GBCC_IM": {
       "topicId": "t_ns7ljv4c",
@@ -201,12 +203,14 @@
       "category": "IB",
       "month": "2026-11",
       "date": "2026-11-30",
-      "start": "12:30",
+      "start": "12:45",
       "end": "14:00",
       "status": "planned",
       "moved": false,
-      "updatedAt": "2026-10-17T13:29:04.368Z",
-      "updatedBy": "bernieonline"
+      "updatedAt": "2026-10-17T13:29:35.703Z",
+      "updatedBy": "bernieonline",
+      "invitesSent": false,
+      "invitesSentAt": ""
     }
   }
 }
