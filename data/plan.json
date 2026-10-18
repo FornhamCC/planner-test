@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-18T17:23:35.874Z",
+    "savedAt": "2026-10-18T17:24:00.031Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -186,6 +186,16 @@
       "briefing": "",
       "updatedAt": "2026-10-18T17:23:20.732Z",
       "updatedBy": "bernieonline"
+    },
+    "t_z86deb1n": {
+      "title": "AI Latest Developments",
+      "category": "WM",
+      "presenter": "",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-10-18T17:23:58.023Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -284,6 +294,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-10-18T17:23:33.864Z",
+      "updatedBy": "bernieonline"
+    },
+    "2026-10_GBCC_WM": {
+      "topicId": "t_z86deb1n",
+      "club": "GBCC",
+      "category": "WM",
+      "month": "2026-10",
+      "date": "2026-10-19",
+      "start": "14:00",
+      "end": "16:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-10-18T17:23:58.025Z",
       "updatedBy": "bernieonline"
     }
   }
