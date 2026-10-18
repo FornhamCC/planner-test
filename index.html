@@ -563,6 +563,13 @@ dialog.help-dialog[open] { display: flex; flex-direction: column; }
 .help-kv dt { color: var(--muted); }
 .help-kv dd { margin: 0; }
 .key-help-btn { color: var(--bronze-ink); padding: 0 10px; }
+/* --- PDFs page (Stage 4a) --- */
+.pdf-months { grid-template-columns: repeat(2, minmax(10rem, 14rem)); }
+.pdf-quick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.pdf-quick .btn { min-height: 38px; padding: 0 12px; }
+.pdf-summary { margin: 0; font-size: 15px; color: var(--ink-2); }
+.pdf-summary:empty { display: none; }
+.card-foot .pdf-status { margin-right: auto; align-self: center; }
 @media (max-width: 560px) { .help-kv { grid-template-columns: 1fr; } .help-kv dd { margin-bottom: 6px; } }
 
 /* --- Fit the board to the iPad's width (Nice to Have 1) ----------------------
@@ -675,14 +682,9 @@ dialog.help-dialog[open] { display: flex; flex-direction: column; }
       <aside class="tray" id="tray" aria-label="Topic tray" hidden></aside>
     </div>
 
-    <!-- PDFs view (built in Stage 4) -->
+    <!-- PDFs view (Stage 4a): the choices are built by renderPdfs() -->
     <div class="page" id="pdfsView" hidden>
-      <div class="page-inner">
-        <section class="card">
-          <h2>PDFs</h2>
-          <p>Making PDFs for a group, a club or the whole plan arrives in a later stage of the build.</p>
-        </section>
-      </div>
+      <div class="page-inner" id="pdfsInner"></div>
     </div>
 
     <!-- Settings view (editing access now; the rest in Stage 3) -->
@@ -1692,7 +1694,9 @@ const state = {
   // --- Stage 3: settings ---
   settingsDirty: new Set(),   // Settings cards holding unsaved typing (the page is then not redrawn)
   settingsLastEditable: null, // whether the Settings page was last drawn editable
-  keyReminderShown: false     // the key renewal reminder has been shown this visit
+  keyReminderShown: false,    // the key renewal reminder has been shown this visit
+  // --- Stage 4a: PDFs ---
+  pdf: null                   // the choices on the PDFs page (see pdfChoices), kept while the page is open
 };
 
 /** Today on this device, worked out fresh each time it is needed. */
@@ -1825,6 +1829,7 @@ function render() {
   renderHeader();
   if (state.view === 'board') { renderBoard(); renderTray(); renderStrip(); }
   if (state.view === 'settings') renderSettings();
+  if (state.view === 'pdfs') updatePdfSummary();   // keeps the "what this PDF holds" line current
   // Redraw an open details panel only when it is read-only: an editable form is
   // left alone so nothing typed is lost; saving compares against what it opened with.
   if (state.details && document.getElementById('detailsSheet').open && !(state.details.editing && canEdit())) renderDetails();
@@ -4103,7 +4108,13 @@ function goToThisMonth() {
 /** Wire up every fixed control once. */
 function bindControls() {
   document.querySelectorAll('[data-icon]').forEach(span => { span.innerHTML = ICONS[span.dataset.icon]; });
-  document.querySelectorAll('.views button').forEach(b => b.addEventListener('click', () => { state.view = b.dataset.view; render(); }));
+  document.querySelectorAll('.views button').forEach(b => b.addEventListener('click', () => {
+    state.view = b.dataset.view;
+    // The PDFs page is drawn when it is opened (not by every render), so the
+    // background refresh never resets a choice being made there.
+    if (state.view === 'pdfs' && state.plan) renderPdfs();
+    render();
+  }));
   document.querySelectorAll('#platformFilter button').forEach(b => b.addEventListener('click', () => {
     state.platform = b.dataset.platform; savePrefs(); render();
   }));
@@ -4204,8 +4215,625 @@ function bindControls() {
 
 
 /* =====================================================================
-   9. PDFs — built in Stage 4 (jsPDF and AutoTable from the vendor folder).
-   10. BACKUP AND RESTORE — built in Stage 4.
+   9. PDFs (Stage 4a)
+   PDFs are drawn directly with jsPDF and its AutoTable add-on, both kept in
+   the vendor/ folder and loaded only when the PDFs page is first opened.
+   Printing the screen is not used: a wide, scrolling grid prints badly.
+
+   Layouts (all A4):
+   - Group: one group's meetings as a list (portrait): date, time, topic,
+     presenter, notes link; optionally each topic's members' briefing.
+   - Club: that club's four groups side by side, a row per month (landscape).
+   - Whole plan: every group side by side, as on the board (landscape),
+     optionally Windows or iPad groups only.
+   - All eight groups: eight group PDFs as separate files, or in one file
+     with each group starting on a new page.
+   Break months are one shaded row; cancelled sessions say "Cancelled";
+   months with no topic yet show the pattern date and "To be arranged".
+   Category colour is a coloured strip and heading, always with the name in
+   text, so a PDF still reads on a black-and-white printer. Notes links are
+   clickable. The "Invitations sent" tick is left out (it is for the editor).
+   PDFs use jsPDF's built-in Helvetica, so no font files are embedded.
+   ===================================================================== */
+
+const PDF_LIBS = ['vendor/jspdf.umd.min.js', 'vendor/jspdf.plugin.autotable.min.js'];
+let pdfLibsPromise = null;
+
+/**
+ * Load jsPDF, then AutoTable, once. Each is added as an ordinary <script>
+ * from this site (allowed by the page's security policy, which only permits
+ * scripts from the site itself). AutoTable must come second: when it loads,
+ * it attaches itself to the jsPDF that is already there (doc.autoTable).
+ * A failed load (offline) is forgotten, so pressing Make PDF again retries.
+ */
+function loadPdfLibraries() {
+  if (window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable) return Promise.resolve();
+  if (pdfLibsPromise) return pdfLibsPromise;
+  const loadOne = src => new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Could not load ' + src + '. Check the internet connection and try again.'));
+    document.head.append(s);
+  });
+  pdfLibsPromise = PDF_LIBS.reduce((chain, src) => chain.then(() => loadOne(src)), Promise.resolve())
+    .catch(err => { pdfLibsPromise = null; throw err; });
+  return pdfLibsPromise;
+}
+
+/* --- The PDFs page ------------------------------------------------------------ */
+
+const PDF_TYPES = [
+  ['group', 'One group', 'A list of one group’s meetings: date, time, topic, presenter and notes link.'],
+  ['club', 'One club', 'That club’s four groups side by side, one row per month (landscape).'],
+  ['whole', 'The whole plan', 'Every group side by side, as on the board (landscape).'],
+  ['allGroups', 'All eight groups in one file', 'Each group starts on a new page. The easiest way on an iPad.'],
+  ['eachGroup', 'All eight groups as separate files', 'Eight group PDFs, downloaded one after another. The browser may ask once to allow several downloads.']
+];
+const PDF_MAX_MONTHS = 36;
+
+/** The calendar year the page suggests: from September on, next year (planning ahead); before that, this year. */
+function defaultPdfYear() {
+  const t = DateEngine.parseMonth(today().month);
+  return t.month >= 9 ? t.year + 1 : t.year;
+}
+
+/** January to December of a year, kept within the months the board offers. */
+function yearRange(year) {
+  const months = selectableMonths();
+  const from = String(year) + '-01' < months[0] ? months[0] : String(year) + '-01';
+  return { from, to: String(year) + '-12' };
+}
+
+/** The choices on the PDFs page, kept between visits (in the page only). */
+function pdfChoices() {
+  if (!state.pdf) {
+    const r = yearRange(defaultPdfYear());
+    state.pdf = { type: 'group', group: settings().clubs[0].code + '_' + CATEGORY_ORDER[0], club: settings().clubs[0].code,
+      platform: 'all', from: r.from, to: r.to, briefings: false };
+  }
+  return state.pdf;
+}
+
+/** Draw the PDFs page from the current choices. */
+function renderPdfs() {
+  const c = pdfChoices();
+  const s = settings();
+  const box = document.getElementById('pdfsInner');
+  // Start loading the libraries now, so Make PDF works straight from the button
+  // press (iPad Safari is happiest when a download follows a tap directly).
+  loadPdfLibraries().catch(() => { /* reported when Make PDF is pressed */ });
+
+  const typeList = el('div', { class: 'radio-list', attrs: { role: 'radiogroup', 'aria-label': 'What to make' } },
+    PDF_TYPES.map(([value, label, help]) => el('label', { class: 'check-row radio-row' },
+      el('input', { type: 'radio', name: 'pdfType', value, checked: c.type === value,
+        on: { change: () => { c.type = value; renderPdfs(); } } }),
+      el('span', {}, label, el('span', { class: 'help', text: help })))));
+
+  const groupOptions = s.clubs.flatMap(k => CATEGORY_ORDER.map(cat => [k.code + '_' + cat, groupName(k.code, cat)]));
+  const which = [];
+  if (c.type === 'group') which.push(setSelect('Group', c.group, groupOptions, { id: 'pdfGroup', on: { change: e => { c.group = e.target.value; updatePdfSummary(); } } }));
+  if (c.type === 'club') which.push(setSelect('Club', c.club, s.clubs.map(k => [k.code, k.name]), { id: 'pdfClub', on: { change: e => { c.club = e.target.value; updatePdfSummary(); } } }));
+  if (c.type === 'whole') which.push(setSelect('Groups', c.platform, [['all', 'All groups'], ['Windows', 'Windows groups only'], ['iPad', 'iPad groups only']],
+    { id: 'pdfPlatform', on: { change: e => { c.platform = e.target.value; updatePdfSummary(); } } }));
+
+  const months = selectableMonths().map(m => [m, DateEngine.formatMonth(m, true)]);
+  const fromSel = setSelect('From', c.from, months, { id: 'pdfFrom', on: { change: e => { c.from = e.target.value; updatePdfSummary(); } } });
+  const toSel = setSelect('To', c.to, months, { id: 'pdfTo', on: { change: e => { c.to = e.target.value; updatePdfSummary(); } } });
+  const thisYear = DateEngine.parseMonth(today().month).year;
+  const quick = el('div', { class: 'pdf-quick' },
+    el('span', { class: 'note', text: 'Quick choice:' }),
+    [thisYear, thisYear + 1].map(y => el('button', { type: 'button', class: 'btn', text: String(y),
+      on: { click: () => { Object.assign(c, yearRange(y)); renderPdfs(); } } })),
+    el('button', { type: 'button', class: 'btn', text: 'Months shown on the board',
+      on: { click: () => { c.from = state.range.from; c.to = state.range.to; renderPdfs(); } } }));
+
+  const groupType = ['group', 'allGroups', 'eachGroup'].includes(c.type);
+  const briefings = groupType ? el('label', { class: 'check-row' },
+    el('input', { type: 'checkbox', id: 'pdfBriefings', checked: c.briefings, on: { change: e => { c.briefings = e.target.checked; } } }),
+    el('span', { text: 'Include each topic’s members’ briefing' })) : null;
+
+  const makeBtn = el('button', { type: 'button', class: 'btn btn-dark', id: 'pdfMake', on: { click: makePdfFromPage } }, icon('doc'), 'Make PDF');
+  box.replaceChildren(
+    el('section', { class: 'card settings-card' },
+      el('h2', { text: 'Make a PDF' }),
+      el('fieldset', { class: 'set-group' }, el('legend', { text: 'What to make' }), typeList),
+      which.length ? el('div', { class: 'set-grid' }, which) : null,
+      el('fieldset', { class: 'set-group' }, el('legend', { text: 'Months' }),
+        el('div', { class: 'set-grid pdf-months' }, fromSel, toSel), quick),
+      briefings,
+      el('p', { class: 'pdf-summary', id: 'pdfSummary', attrs: { 'aria-live': 'polite' } }),
+      el('p', { class: 'card-error', id: 'pdfError', attrs: { role: 'alert' } }),
+      el('div', { class: 'card-foot' }, el('span', { class: 'note pdf-status', id: 'pdfStatus', attrs: { role: 'status' } }), makeBtn)),
+    el('section', { class: 'card' },
+      el('h2', { text: 'Saving the PDF' }),
+      el('p', { text: 'On a PC the PDF goes to your Downloads folder. On an iPad, Safari asks to download it: tap Download, then open it from the downloads arrow at the top and use Share → Save to Files to put it in OneDrive.' }),
+      el('p', { class: 'note', text: 'Anyone with the board’s address can make these PDFs. They show the plan as it is now; unsaved changes on this device are included.' })));
+  updatePdfSummary();
+}
+
+/** The columns (club + category) a PDF covers, in board order. */
+function pdfColumns(c) {
+  const s = settings();
+  if (c.type === 'club') return CATEGORY_ORDER.map(cat => ({ club: c.club, cat }));
+  if (c.type === 'group') { const [club, cat] = c.group.split('_'); return [{ club, cat }]; }
+  const cats = CATEGORY_ORDER.filter(cat => c.type !== 'whole' || c.platform === 'all' || (categoryOf(cat) || {}).platform === c.platform);
+  return cats.flatMap(cat => s.clubs.map(k => ({ club: k.code, cat })));
+}
+
+/** A one-line description of what the chosen PDF will hold; also checks the months. */
+function pdfProblem(c) {
+  if (c.to < c.from) return '“To” must be the same as or after “From”.';
+  if (DateEngine.monthsBetween(c.from, c.to).length > PDF_MAX_MONTHS) return 'Please choose at most ' + PDF_MAX_MONTHS + ' months.';
+  return '';
+}
+function updatePdfSummary() {
+  const box = document.getElementById('pdfSummary');
+  if (!box || !state.pdf) return;
+  const c = state.pdf;
+  const problem = pdfProblem(c);
+  document.getElementById('pdfError').textContent = problem;
+  document.getElementById('pdfMake').disabled = !!problem;
+  if (problem) { box.textContent = ''; return; }
+  const months = DateEngine.monthsBetween(c.from, c.to);
+  const meeting = months.filter(m => !DateEngine.isBreakMonth(settings(), m));
+  const cols = pdfColumns(c);
+  let slots = 0, planned = 0;
+  meeting.forEach(m => cols.forEach(col => {
+    if (!DateEngine.sessionDate(settings(), m, col.club, col.cat)) return;
+    slots++;
+    if (state.plan.sessions[sessionKey(m, col.club, col.cat)]) planned++;
+  }));
+  box.textContent = DateEngine.formatMonth(c.from) + ' to ' + DateEngine.formatMonth(c.to) + ': ' +
+    meeting.length + (meeting.length === 1 ? ' meeting month' : ' meeting months') +
+    (months.length > meeting.length ? ', ' + (months.length - meeting.length) + ' break' : '') +
+    '. ' + planned + ' of ' + slots + (slots === 1 ? ' meeting has' : ' meetings have') + ' a topic so far.';
+}
+
+/** Make PDF: build the chosen PDF(s) and hand them to the browser. */
+async function makePdfFromPage() {
+  const c = pdfChoices();
+  const btn = document.getElementById('pdfMake');
+  const status = document.getElementById('pdfStatus');
+  const errorBox = document.getElementById('pdfError');
+  if (pdfProblem(c)) return;
+  errorBox.textContent = '';
+  btn.disabled = true;
+  status.textContent = 'Making the PDF…';
+  try {
+    await loadPdfLibraries();
+    const files = buildPdfs(c, (done, total) => { status.textContent = 'Making ' + done + ' of ' + total + '…'; });
+    for (let i = 0; i < files.length; i++) {
+      // A short gap between files, so the browser treats them as separate downloads.
+      if (i) await new Promise(r => setTimeout(r, 700));
+      downloadBlob(files[i].blob, files[i].name);
+    }
+    status.textContent = files.length === 1 ? 'Made “' + files[0].name + '”.' : 'Made ' + files.length + ' PDFs.';
+    toast(files.length === 1 ? 'PDF made. Look in your downloads.' : files.length + ' PDFs made. Look in your downloads.');
+  } catch (err) {
+    errorBox.textContent = 'The PDF could not be made: ' + err.message;
+    status.textContent = '';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/** Hand a file made in the page to the browser as a download (see downloadCalendarEntry). */
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = el('a', { href: url, download: name, attrs: { hidden: true } });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+/** A file name with only safe characters: 'GBCC Windows Beginners 2027-01 to 2027-12.pdf'. */
+function pdfFileName(text) {
+  return text.replace(/[^A-Za-z0-9 ._()&-]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 120) + '.pdf';
+}
+
+/**
+ * Build the PDF file(s) for a set of choices. Returns [{ name, blob }].
+ * progress(done, total) is called as each file is finished.
+ * Kept apart from the page, so tests can call it directly.
+ */
+function buildPdfs(c, progress) {
+  const range = c.from + ' to ' + c.to;
+  const groups = settings().clubs.flatMap(k => CATEGORY_ORDER.map(cat => ({ club: k.code, cat })));
+  const out = [];
+  const finish = (doc, name) => { out.push({ name: pdfFileName(name), blob: PdfDraw.finish(doc) }); if (progress) progress(out.length, total); };
+  let total = 1;
+  if (c.type === 'group') {
+    const [club, cat] = c.group.split('_');
+    const doc = PdfDraw.newDoc('portrait');
+    PdfDraw.groupPlan(doc, club, cat, c);
+    finish(doc, groupName(club, cat) + ' ' + range);
+  } else if (c.type === 'eachGroup') {
+    total = groups.length;
+    groups.forEach(g => {
+      const doc = PdfDraw.newDoc('portrait');
+      PdfDraw.groupPlan(doc, g.club, g.cat, c);
+      finish(doc, groupName(g.club, g.cat) + ' ' + range);
+    });
+  } else if (c.type === 'allGroups') {
+    const doc = PdfDraw.newDoc('portrait');
+    doc.__title = 'All groups – topic plan';
+    groups.forEach((g, i) => { if (i) doc.addPage(); PdfDraw.groupPlan(doc, g.club, g.cat, c); });
+    finish(doc, 'All groups ' + range);
+  } else if (c.type === 'club') {
+    const doc = PdfDraw.newDoc('landscape');
+    PdfDraw.gridPlan(doc, pdfColumns(c), c, clubOf(c.club).name, 'club');
+    finish(doc, clubOf(c.club).name + ' ' + range);
+  } else {
+    const doc = PdfDraw.newDoc('landscape');
+    const label = c.platform === 'all' ? 'Whole plan' : 'Whole plan, ' + c.platform + ' groups';
+    PdfDraw.gridPlan(doc, pdfColumns(c), c, label, 'whole');
+    finish(doc, (c.platform === 'all' ? 'Whole plan ' : 'Whole plan (' + c.platform + ') ') + range);
+  }
+  return out;
+}
+
+/* --- What goes in a PDF: rows built from the plan --------------------------------
+   Pure look-ups on the in-memory plan, so the drawing code below only lays out. */
+
+/**
+ * The months from..to as rows: { kind: 'month', month } or, for one or more
+ * break months in a row, { kind: 'break', from, to, label }.
+ */
+function pdfMonthRows(from, to) {
+  const s = settings();
+  const months = DateEngine.monthsBetween(from, to);
+  const rows = [];
+  for (let i = 0; i < months.length; i++) {
+    if (!DateEngine.isBreakMonth(s, months[i])) { rows.push({ kind: 'month', month: months[i] }); continue; }
+    let end = i;
+    while (end + 1 < months.length && DateEngine.isBreakMonth(s, months[end + 1])) end++;
+    const label = (s.breakNames && s.breakNames[DateEngine.parseMonth(months[i]).month]) || 'Break';
+    rows.push({ kind: 'break', from: months[i], to: months[end], label });
+    i = end;
+  }
+  return rows;
+}
+
+/**
+ * One cell of the plan for a PDF: the session placed there, or the meeting
+ * pattern's date when it is still empty. Returns null when the group does not
+ * meet that month.
+ */
+function pdfCell(month, club, cat) {
+  const ses = state.plan.sessions[sessionKey(month, club, cat)];
+  if (ses) {
+    const topic = state.plan.topics[ses.topicId] || { title: '(missing topic)' };
+    return {
+      date: ses.date, start: ses.start, end: ses.end, title: topic.title,
+      presenter: topic.presenter || '', presenterName: topic.presenter ? presenterName(topic.presenter) : '',
+      notesUrl: isSafeUrl(topic.notesUrl) ? topic.notesUrl : '', briefing: topic.briefing || '',
+      cancelled: ses.status === 'cancelled', event: topic.category === CLUB_EVENT,
+      closed: closureOn(ses.date, club), colours: (categoryOf(topic.category) || categoryOf(cat)).colours
+    };
+  }
+  const pattern = DateEngine.sessionDate(settings(), month, club, cat);
+  if (!pattern) return null;
+  return { empty: true, date: pattern.date, start: pattern.start, end: pattern.end, closed: pattern.closure };
+}
+
+/* --- Drawing (jsPDF + AutoTable) -------------------------------------------------- */
+const PdfDraw = (() => {
+  // jsPDF measures in millimetres here (unit: 'mm'); font sizes are in points.
+  const PT = 25.4 / 72;            // one point in millimetres
+  const LINE = 1.18;               // line height as a multiple of the font size
+  const INK = [28, 27, 25], MUTED = [94, 90, 84], RULE = [214, 207, 196], DANGER = [161, 44, 34];
+  const BRONZE = [184, 149, 106], BRONZE_INK = [122, 90, 46], BREAK_FILL = [240, 236, 229];
+  const TOP = 27;                  // where tables start on each page, below the page heading
+  const BOTTOM = 15;               // room for the footer
+
+  /** '#E6F0FC' -> [230, 240, 252]. */
+  function rgb(hex) {
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex || ''));
+    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [240, 240, 240];
+  }
+
+  /*
+   * The built-in Helvetica only has the Windows-1252 characters (letters with
+   * accents, curly quotes, dashes, the euro sign …). Anything else, such as
+   * an arrow or an emoji typed into a title, would print as junk, so it is
+   * swapped for a plain equivalent or removed.
+   */
+  const CP1252_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+  const SWAPS = { '→': '->', '←': '<-', '✓': '', '✔': '', '×': 'x', '≥': '>=', '≤': '<=', ' ': ' ', ' ': ' ', ' ': ' ' };
+  function text(value) {
+    let out = '';
+    for (const ch of String(value || '').normalize('NFC')) {
+      if (ch in SWAPS) out += SWAPS[ch];
+      else if (ch === '\n' || (ch >= ' ' && ch.charCodeAt(0) < 256) || CP1252_EXTRA.includes(ch)) out += ch;
+      else {
+        const plain = ch.normalize('NFD').replace(/[̀-ͯ]/g, '');   // e.g. ł stays, ő -> o
+        out += plain.length === 1 && plain.charCodeAt(0) < 256 ? plain : '';
+      }
+    }
+    return out;
+  }
+
+  /** A new A4 document. compress: true keeps the file small. */
+  function newDoc(orientation) {
+    // jsPDF is loaded as window.jspdf by the UMD build in vendor/.
+    return new window.jspdf.jsPDF({ orientation, unit: 'mm', format: 'a4', compress: true });
+  }
+
+  /**
+   * Finish a document: fill in "Page x of y" now the page count is known
+   * (putTotalPages swaps the placeholder written on each page), set the file's
+   * properties, and return it as a Blob ready to download.
+   */
+  function finish(doc) {
+    doc.putTotalPages('{total}');
+    doc.setProperties({ title: doc.__title || 'Topic plan', creator: 'Topic Planning Board' });
+    return doc.output('blob');
+  }
+
+  /** The board's web address for the footer, e.g. 'fornhamcc.github.io/planner'. */
+  function boardAddress() {
+    const path = location.pathname.replace(/index\.html$/, '').replace(/\/$/, '');
+    return location.protocol.startsWith('http') ? location.host + path : 'fornhamcc.github.io/planner';
+  }
+
+  /** Heading and footer on each page. strip: colour of the bar above the title. */
+  function pageFrame(doc, title, subtitle, strip) {
+    const w = doc.internal.pageSize.getWidth(), h = doc.internal.pageSize.getHeight();
+    const m = 12;
+    doc.setFillColor(...strip);
+    doc.rect(m, 8, w - 2 * m, 1.6, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...INK);
+    doc.text(text(title), m, 16.5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...MUTED);
+    doc.text(text(subtitle), m, 21.5);
+    doc.text(text(settings().boardTitle || 'Topic Planning Board'), w - m, 16.5, { align: 'right' });
+    // Footer
+    doc.setDrawColor(...RULE); doc.setLineWidth(0.2);
+    doc.line(m, h - 10, w - m, h - 10);
+    doc.setFontSize(8.5);
+    doc.text(text('Printed on ' + DateEngine.formatDayDate(today().date, true) + '  ·  ' + boardAddress()), m, h - 6);
+    // '{total}' is replaced by the number of pages in finish(); the page number is this page's.
+    doc.text('Page ' + doc.internal.getCurrentPageInfo().pageNumber + ' of {total}', w - m, h - 6, { align: 'right' });
+  }
+
+  /*
+   * Cells drawn by hand. AutoTable gives a whole cell one font, but a session
+   * needs a small date line, a bold title and a lighter presenter line. So each
+   * such cell carries 'parts' (text, size, bold, colour). Before layout, the
+   * parts are wrapped to the column width and the cell is given placeholder
+   * lines making it the right height; when the cell is drawn, AutoTable's own
+   * text is cleared and the parts are written in its place.
+   */
+
+  /** Wrap parts to a width (mm). Returns the lines to draw and their total height. */
+  function layoutParts(doc, parts, width) {
+    const lines = [];
+    let height = 0;
+    parts.forEach(p => {
+      if (p.gap) { height += p.gap; lines.push({ gap: p.gap }); return; }
+      doc.setFont('helvetica', p.bold ? 'bold' : p.italic ? 'italic' : 'normal');
+      doc.setFontSize(p.size);
+      // splitTextToSize breaks text into lines that fit the width with the current font.
+      doc.splitTextToSize(text(p.text), width).forEach(line => {
+        lines.push({ line, size: p.size, bold: p.bold, italic: p.italic, colour: p.colour || INK, link: p.link, underline: p.underline });
+        height += p.size * PT * LINE;
+      });
+    });
+    return { lines, height };
+  }
+
+  /** didParseCell: size a hand-drawn cell by giving AutoTable placeholder lines of the right total height. */
+  function sizeCustomCell(doc, data) {
+    const raw = data.cell.raw;
+    if (!raw || !raw.parts) return;
+    const pad = data.cell.styles.cellPadding;
+    const padH = typeof pad === 'number' ? pad * 2 : (pad.left || 0) + (pad.right || 0);
+    const width = raw.width - padH - 0.4;
+    raw.layout = layoutParts(doc, raw.parts, width);
+    const baseLine = data.cell.styles.fontSize * PT * data.cell.styles.lineHeightFactor || data.cell.styles.fontSize * PT * 1.15;
+    const count = Math.max(1, Math.ceil(raw.layout.height / baseLine - 0.01));
+    data.cell.text = new Array(count).fill('x');
+  }
+
+  /** didDrawCell: the colour strip, the hand-drawn lines and any link for a cell. */
+  function drawCustomCell(doc, data) {
+    const raw = data.cell.raw;
+    if (!raw || typeof raw !== 'object') return;
+    const cell = data.cell;
+    if (raw.strip) { doc.setFillColor(...raw.strip); doc.rect(cell.x, cell.y, 1.3, cell.height, 'F'); }
+    if (raw.topBar) { doc.setFillColor(...raw.topBar); doc.rect(cell.x, cell.y, cell.width, 1.3, 'F'); }
+    if (raw.layout) {
+      const pad = cell.styles.cellPadding;
+      const left = cell.x + (typeof pad === 'number' ? pad : pad.left) + (raw.strip ? 0.9 : 0);
+      let y = cell.y + (typeof pad === 'number' ? pad : pad.top);
+      raw.layout.lines.forEach(l => {
+        if (l.gap) { y += l.gap; return; }
+        doc.setFont('helvetica', l.bold ? 'bold' : l.italic ? 'italic' : 'normal');
+        doc.setFontSize(l.size);
+        doc.setTextColor(...l.colour);
+        const step = l.size * PT * LINE;
+        // jsPDF places text by its baseline: about 0.8 of the font size below the line's top.
+        const base = y + l.size * PT * 0.86;
+        doc.text(l.line, left, base);
+        if (l.underline) {
+          const w = doc.getTextWidth(l.line);
+          doc.setDrawColor(...l.colour); doc.setLineWidth(0.2);
+          doc.line(left, base + 0.6, left + w, base + 0.6);
+        }
+        y += step;
+      });
+    }
+    // doc.link makes a clickable area in the PDF that opens a web address.
+    if (raw.link) doc.link(cell.x, cell.y, cell.width, cell.height, { url: raw.link });
+  }
+
+  /** willDrawCell: hide AutoTable's placeholder text in hand-drawn cells (background and borders still drawn). */
+  function hidePlaceholder(data) { if (data.cell.raw && data.cell.raw.parts) data.cell.text = []; }
+
+  /** "July – August 2027: Summer break, no meetings" */
+  function breakText(row) {
+    const a = DateEngine.monthName(row.from), b = DateEngine.monthName(row.to);
+    const year = DateEngine.parseMonth(row.to).year;
+    return (row.from === row.to ? a : a + ' – ' + b) + ' ' + year + ': ' + row.label + ', no meetings';
+  }
+
+  /** Common AutoTable settings. */
+  function tableOptions(doc, extra) {
+    return Object.assign({
+      margin: { top: TOP + 2, bottom: BOTTOM, left: 12, right: 12 },
+      theme: 'plain',
+      styles: { font: 'helvetica', fontSize: 9.5, textColor: INK, cellPadding: 2, lineColor: RULE, lineWidth: 0.2,
+        valign: 'top', overflow: 'linebreak' },
+      // 'avoid' moves a row that would be split across two pages onto the next page whole.
+      rowPageBreak: 'avoid',
+      didParseCell: data => sizeCustomCell(doc, data),
+      willDrawCell: data => hidePlaceholder(data),
+      didDrawCell: data => drawCustomCell(doc, data)
+    }, extra);
+  }
+
+  /* --- Group plan: a list, portrait ------------------------------------------- */
+  function groupPlan(doc, club, cat, c) {
+    const category = categoryOf(cat);
+    const colours = category.colours;
+    const clubInfo = clubOf(club);
+    const title = groupName(club, cat);
+    doc.__title = doc.__title || title + ' – topic plan';
+    const widths = [32, 22, 0, 34, 21];                            // date, time, topic, presenter, notes (mm)
+    widths[2] = doc.internal.pageSize.getWidth() - 24 - widths.reduce((a, b) => a + b, 0);
+    const body = [];
+    pdfMonthRows(c.from, c.to).forEach(row => {
+      if (row.kind === 'break') {
+        body.push([{ content: text(breakText(row)), colSpan: 5, styles: { fillColor: BREAK_FILL, textColor: MUTED, fontStyle: 'bold' } }]);
+        return;
+      }
+      const cell = pdfCell(row.month, club, cat);
+      if (!cell) return;
+      const when = DateEngine.formatDayDate(cell.date, true);
+      const time = DateEngine.formatTime(cell.start) + '–' + DateEngine.formatTime(cell.end);
+      if (cell.empty) {
+        body.push([when, time,
+          { content: '', width: widths[2], parts: cell.closed
+            ? [{ text: 'Closed: ' + cell.closed, size: 9.5, bold: true, colour: DANGER }]
+            : [{ text: 'To be arranged', size: 9.5, italic: true, colour: MUTED }] },
+          '', '']);
+        return;
+      }
+      const parts = [{ text: cell.title, size: 10, bold: true, colour: cell.cancelled ? MUTED : INK }];
+      const tags = [cell.event ? 'Club event' : '', cell.cancelled ? 'Cancelled' : '', cell.closed && !cell.cancelled ? 'Closed: ' + cell.closed : ''].filter(Boolean);
+      if (tags.length) parts.push({ text: tags.join('  ·  '), size: 8.5, bold: true, colour: cell.cancelled || cell.closed ? DANGER : BRONZE_INK });
+      if (c.briefings && cell.briefing && !cell.cancelled) parts.push({ gap: 1.2 }, { text: cell.briefing, size: 8.5, colour: MUTED });
+      body.push([
+        { content: when, strip: cell.event ? BRONZE : rgb(colours.strong), styles: { fontStyle: 'bold' } },
+        time,
+        { content: '', width: widths[2], parts },
+        text(cell.presenterName),
+        cell.notesUrl && !cell.cancelled
+          ? { content: '', width: widths[4], link: cell.notesUrl, parts: [{ text: 'Open notes', size: 9, colour: BRONZE_INK, underline: true }] }
+          : ''
+      ]);
+    });
+    if (!body.length) body.push([{ content: 'No meetings in these months.', colSpan: 5, styles: { textColor: MUTED } }]);
+    const subtitle = clubInfo.name + '  ·  ' + DateEngine.formatMonth(c.from) + ' to ' + DateEngine.formatMonth(c.to);
+    // startY: the first page's table starts below the heading. didDrawPage runs for
+    // every page the table uses, drawing the heading and footer on each.
+    doc.autoTable(tableOptions(doc, {
+      startY: TOP + 2,
+      head: [['Date', 'Time', 'Topic', 'Presenter', 'Notes']],
+      body,
+      headStyles: { fillColor: rgb(colours.fill), textColor: rgb(colours.ink), fontStyle: 'bold', lineColor: rgb(colours.line) },
+      columnStyles: Object.fromEntries(widths.map((w, i) => [i, { cellWidth: w }])),
+      didDrawPage: () => pageFrame(doc, title, subtitle, rgb(colours.strong))
+    }));
+  }
+
+  /* --- Club or whole plan: a grid, landscape -------------------------------------
+     A row per month, a column per group, laid out like the board. */
+  function gridPlan(doc, cols, c, title, kind) {
+    doc.__title = title + ' – topic plan';
+    const pageW = doc.internal.pageSize.getWidth();
+    const monthW = 21;
+    const colW = (pageW - 24 - monthW) / cols.length;
+    const small = cols.length > 4;                              // eight columns: slightly smaller text
+    // Sizes chosen so a calendar year (nine meeting months) fits on one A4 sheet.
+    const sz = small ? { when: 6.4, title: 7.6, meta: 6.4 } : { when: 7.6, title: 9, meta: 7.4 };
+    const head = [];
+    if (kind === 'whole') {
+      // Row 1: each category spanning its clubs' columns. Row 2: the club codes.
+      const row1 = [{ content: 'Month', rowSpan: 2, styles: { fillColor: INK, textColor: [217, 195, 160], valign: 'bottom' } }];
+      for (let i = 0; i < cols.length;) {
+        let span = 1;
+        while (i + span < cols.length && cols[i + span].cat === cols[i].cat) span++;
+        const cat = categoryOf(cols[i].cat);
+        row1.push({ content: text(cat.name), colSpan: span, topBar: rgb(cat.colours.strong),
+          styles: { fillColor: rgb(cat.colours.fill), textColor: rgb(cat.colours.ink), fontStyle: 'bold', fontSize: 10, cellPadding: { top: 3, right: 2, bottom: 2, left: 2 } } });
+        i += span;
+      }
+      head.push(row1, cols.map(col => ({ content: col.club, styles: { fillColor: [250, 248, 245], textColor: [58, 55, 50], fontSize: 8.5 } })));
+    } else {
+      head.push([{ content: 'Month', styles: { fillColor: INK, textColor: [217, 195, 160], valign: 'bottom' } }]
+        .concat(cols.map(col => {
+          const cat = categoryOf(col.cat);
+          return { content: text(groupName(col.club, col.cat)), topBar: rgb(cat.colours.strong),
+            styles: { fillColor: rgb(cat.colours.fill), textColor: rgb(cat.colours.ink), fontStyle: 'bold', fontSize: 10, cellPadding: { top: 3, right: 2, bottom: 2, left: 2 } } };
+        })));
+    }
+    const body = [];
+    pdfMonthRows(c.from, c.to).forEach(row => {
+      if (row.kind === 'break') {
+        const a = DateEngine.monthName(row.from).slice(0, 3), b = DateEngine.monthName(row.to).slice(0, 3);
+        body.push([
+          { content: '', width: monthW, parts: [{ text: row.from === row.to ? DateEngine.monthName(row.from) : a + ' – ' + b, size: 9.5, bold: true, colour: MUTED },
+            { text: String(DateEngine.parseMonth(row.from).year), size: 8, colour: MUTED }], styles: { fillColor: BREAK_FILL } },
+          { content: text(row.label + ' – no meetings'), colSpan: cols.length, styles: { fillColor: BREAK_FILL, textColor: MUTED, fontStyle: 'bold' } }]);
+        return;
+      }
+      const cells = [{ content: '', width: monthW, parts: [
+        { text: DateEngine.monthName(row.month), size: 9, bold: true },
+        { text: String(DateEngine.parseMonth(row.month).year), size: 7.5, colour: MUTED }] }];
+      cols.forEach(col => {
+        const cell = pdfCell(row.month, col.club, col.cat);
+        if (!cell) { cells.push(''); return; }
+        const when = DateEngine.formatDayDate(cell.date) + ' · ' + DateEngine.formatTime(cell.start) + '–' + DateEngine.formatTime(cell.end);
+        if (cell.empty) {
+          cells.push({ content: '', width: colW, parts: [
+            { text: when, size: sz.when, colour: MUTED },
+            cell.closed ? { text: 'Closed: ' + cell.closed, size: sz.meta, bold: true, colour: DANGER } : { text: '–', size: sz.meta, colour: MUTED }] });
+          return;
+        }
+        const parts = [{ text: when, size: sz.when, bold: true, colour: rgb(cell.colours.ink) },
+          { gap: 0.3 },
+          { text: cell.title, size: sz.title, bold: true, colour: cell.cancelled ? MUTED : INK }];
+        const meta = [cell.presenter, cell.event ? 'Club event' : '', cell.notesUrl && !cell.cancelled ? 'Notes' : ''].filter(Boolean).join('  ·  ');
+        if (cell.cancelled) parts.push({ text: 'Cancelled', size: sz.meta, bold: true, colour: DANGER });
+        else if (cell.closed) parts.push({ text: 'Closed: ' + cell.closed, size: sz.meta, bold: true, colour: DANGER });
+        if (meta) parts.push({ text: meta, size: sz.meta, colour: MUTED, underline: false });
+        cells.push({ content: '', width: colW, parts, strip: rgb(cell.colours.strong),
+          link: cell.notesUrl && !cell.cancelled ? cell.notesUrl : null, styles: { fillColor: rgb(cell.colours.fill) } });
+      });
+      body.push(cells);
+    });
+    const subtitle = (kind === 'club' ? 'Four groups side by side' : cols.length + ' groups side by side') +
+      '  ·  ' + DateEngine.formatMonth(c.from) + ' to ' + DateEngine.formatMonth(c.to) +
+      (body.some(r => r.some(x => x && x.link)) ? '  ·  Click a topic marked Notes to open its tutorial notes' : '');
+    doc.autoTable(tableOptions(doc, {
+      startY: TOP + 2,
+      head,
+      body,
+      styles: { font: 'helvetica', fontSize: 7, textColor: INK, cellPadding: { top: 1.2, right: 1.4, bottom: 1.2, left: 1.4 }, lineColor: RULE, lineWidth: 0.2, valign: 'top', overflow: 'linebreak' },
+      columnStyles: Object.assign({ 0: { cellWidth: monthW } }, Object.fromEntries(cols.map((_, i) => [i + 1, { cellWidth: colW }]))),
+      didDrawPage: () => pageFrame(doc, title, subtitle, BRONZE)
+    }));
+  }
+
+  return { newDoc, finish, groupPlan, gridPlan, text };
+})();
+
+
+/* =====================================================================
+   10. BACKUP AND RESTORE — Stage 4b.
    ===================================================================== */
 
 
