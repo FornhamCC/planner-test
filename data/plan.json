@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-18T17:24:54.140Z",
+    "savedAt": "2026-10-18T17:25:09.097Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -206,6 +206,16 @@
       "briefing": "",
       "updatedAt": "2026-10-18T17:24:27.193Z",
       "updatedBy": "bernieonline"
+    },
+    "t_fvn7rz3f": {
+      "title": "Passkeys",
+      "category": "IM",
+      "presenter": "",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-10-18T17:25:07.075Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -356,6 +366,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-10-18T17:24:52.127Z",
+      "updatedBy": "bernieonline"
+    },
+    "2026-10_GBCC_IM": {
+      "topicId": "t_fvn7rz3f",
+      "club": "GBCC",
+      "category": "IM",
+      "month": "2026-10",
+      "date": "2026-10-26",
+      "start": "14:00",
+      "end": "16:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-10-18T17:25:07.078Z",
       "updatedBy": "bernieonline"
     }
   }
