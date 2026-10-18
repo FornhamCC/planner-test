@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-17T13:50:36.309Z",
+    "savedAt": "2026-10-18T17:23:22.748Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -176,6 +176,16 @@
       "briefing": "",
       "updatedAt": "2026-10-17T13:50:00.705Z",
       "updatedBy": "bernieonline"
+    },
+    "t_87a2uhpi": {
+      "title": "passwords",
+      "category": "WB",
+      "presenter": "",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-10-18T17:23:20.732Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -249,6 +259,19 @@
       "updatedBy": "bernieonline",
       "invitesSent": false,
       "invitesSentAt": ""
+    },
+    "2026-10_GBCC_WB": {
+      "topicId": "t_87a2uhpi",
+      "club": "GBCC",
+      "category": "WB",
+      "month": "2026-10",
+      "date": "2026-10-19",
+      "start": "12:35",
+      "end": "14:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-10-18T17:23:20.734Z",
+      "updatedBy": "bernieonline"
     }
   }
 }
