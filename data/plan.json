@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-18T17:24:06.406Z",
+    "savedAt": "2026-10-18T17:24:29.204Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -196,6 +196,16 @@
       "briefing": "",
       "updatedAt": "2026-10-18T17:23:58.023Z",
       "updatedBy": "bernieonline"
+    },
+    "t_2cybqfet": {
+      "title": "Photos",
+      "category": "IB",
+      "presenter": "",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-10-18T17:24:27.193Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -320,6 +330,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-10-18T17:24:04.385Z",
+      "updatedBy": "bernieonline"
+    },
+    "2026-10_GBCC_IB": {
+      "topicId": "t_2cybqfet",
+      "club": "GBCC",
+      "category": "IB",
+      "month": "2026-10",
+      "date": "2026-10-26",
+      "start": "12:45",
+      "end": "14:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-10-18T17:24:27.195Z",
       "updatedBy": "bernieonline"
     }
   }
