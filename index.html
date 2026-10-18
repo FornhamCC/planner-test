@@ -563,6 +563,15 @@ dialog.help-dialog[open] { display: flex; flex-direction: column; }
 .help-kv dt { color: var(--muted); }
 .help-kv dd { margin: 0; }
 .key-help-btn { color: var(--bronze-ink); padding: 0 10px; }
+/* --- Backup, history and archive card (Stage 4b) --- */
+.keep-safe h3 { margin: 18px 0 4px; padding-top: 14px; border-top: 1px solid var(--line); }
+.keep-safe h2 + h3 { border-top: 0; padding-top: 0; margin-top: 8px; }
+.history-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; max-height: 420px; overflow: auto; margin-top: 8px; }
+.history-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.history-row:last-child { border-bottom: 0; }
+.history-text { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 15px; }
+.history-text > span:last-child { flex-basis: 100%; overflow-wrap: anywhere; }
+.history-row .btn { min-height: 38px; }
 /* --- PDFs page (Stage 4a) --- */
 .pdf-months { grid-template-columns: repeat(2, minmax(10rem, 14rem)); }
 .pdf-quick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
@@ -654,6 +663,10 @@ dialog.help-dialog[open] { display: flex; flex-direction: column; }
       <button type="button" class="btn btn-icon" id="rangeLater" aria-label="Later months"><span class="icon" data-icon="right"></span></button>
       <button type="button" class="btn" id="thisMonthBtn" style="margin-left:6px">This month</button>
     </div>
+    <!-- Stage 4b: shown once a year has been archived. Picks the current plan or an archived year (read-only). -->
+    <label class="field-inline" id="planChoiceWrap" hidden><span class="label-text">Showing</span>
+      <select class="input" id="planChoice" aria-label="Plan shown"></select>
+    </label>
     <label class="field-inline"><span class="label-text">Columns</span>
       <select class="input" id="groupBySelect" aria-label="Columns">
         <option value="category">By category</option>
@@ -903,7 +916,9 @@ const DATA_VERSION = 1;
 const STORE = {
   key: 'tpb.accessKey',
   keyExpiry: 'tpb.keyExpiry',   // the key's expiry date typed in Settings, when GitHub does not report it
-  prefs: 'tpb.prefs'
+  prefs: 'tpb.prefs',
+  lastBackup: 'tpb.lastBackup', // date of the last backup downloaded on this device (Stage 4b)
+  backupSeen: 'tpb.backupSeen'  // first day this device was seen without a backup, for the 90-day nudge
 };
 
 /* Timings, in milliseconds */
@@ -1524,6 +1539,13 @@ function opTable(plan, op) { return op.kind === 'topic' ? plan.topics : plan.ses
  */
 function applyOps(plan, ops, check) {
   for (const op of ops) {
+    if (op.kind === 'plan') {
+      // Stage 4b: restoring a backup or an earlier version replaces the whole
+      // plan in one operation, checked and undone like any other.
+      if (check && stableJson(planBody(plan)) !== stableJson(op.before)) return op;
+      Object.assign(plan, clone(op.after));
+      continue;
+    }
     if (op.kind === 'settings') {
       if (check && stableJson(plan.settings || null) !== stableJson(op.before)) return op;
       plan.settings = clone(op.after);
@@ -1535,6 +1557,11 @@ function applyOps(plan, ops, check) {
     else delete table[op.id];
   }
   return null;
+}
+
+/** The parts of a plan a 'plan' operation replaces (everything except meta). */
+function planBody(plan) {
+  return { settings: plan.settings || null, topics: plan.topics || {}, sessions: plan.sessions || {} };
 }
 
 /** A readable commit message for a batch of operations (kept under 200 characters). */
@@ -1568,6 +1595,9 @@ function scheduleSave(delay) {
 function rebuildLocalPlan() {
   const plan = clone(state.remote.data);
   applyOps(plan, state.pending, false);
+  // While an archived year is on show (Stage 4b), it stays on screen; the
+  // current plan is drawn again when the viewer goes back to it.
+  if (state.archiveView) { state.livePlan = plan; return; }
   state.plan = plan;
   render();
 }
@@ -1640,7 +1670,7 @@ function dropConflict(op) {
   const dropped = op.group ? state.pending.filter(o => o.group === op.group) : [op];
   state.pending = state.pending.filter(o => !dropped.includes(o));
   if (op.group) state.undo = state.undo.filter(u => u.group !== op.group);
-  const what = op.kind === 'settings' ? 'the settings'
+  const what = op.kind === 'plan' ? 'the plan' : op.kind === 'settings' ? 'the settings'
     : op.kind === 'topic'
     ? 'the topic “' + ((op.after || op.before || {}).title || 'untitled') + '”'
     : 'the ' + describeSession(op.id) + ' session';
@@ -1696,7 +1726,13 @@ const state = {
   settingsLastEditable: null, // whether the Settings page was last drawn editable
   keyReminderShown: false,    // the key renewal reminder has been shown this visit
   // --- Stage 4a: PDFs ---
-  pdf: null                   // the choices on the PDFs page (see pdfChoices), kept while the page is open
+  pdf: null,                  // the choices on the PDFs page (see pdfChoices), kept while the page is open
+  // --- Stage 4b: backup, history and archive ---
+  archiveView: null,          // the year of the archive on show (read-only), or null for the current plan
+  livePlan: null,             // the current plan, kept aside while an archive is on show
+  history: null,              // the History list once loaded: [{ sha, date, who, message }]
+  archivePromptShown: false,  // "2026 has ended. Archive it now?" shown this visit
+  backupNudgeShown: false     // the 90-day backup reminder shown this visit
 };
 
 /** Today on this device, worked out fresh each time it is needed. */
@@ -1719,7 +1755,7 @@ function savePrefs() {
 }
 
 /** True when this device may edit right now. */
-function canEdit() { return !!(state.account && state.account.canWrite && state.mode === 'edit'); }
+function canEdit() { return !!(state.account && state.account.canWrite && state.mode === 'edit' && !state.archiveView); }
 
 /* --- Small look-ups ------------------------------------------------------------ */
 function settings() { return state.plan.settings; }
@@ -1764,8 +1800,15 @@ function visibleColumns() {
 }
 /** The months the range selector offers. */
 function selectableMonths() {
+  // An archived year (Stage 4b): just its own January to December.
+  if (state.archiveView) return DateEngine.monthsBetween(state.archiveView + '-01', state.archiveView + '-12');
+  // Nice to Have 6: the live plan goes back at most 12 months, unless older
+  // sessions are still in it (a year not yet archived), which stay reachable.
+  const sessions = state.plan ? Object.values(state.plan.sessions) : [];
+  const oldest = sessions.reduce((m, ses) => ses.month < m ? ses.month : m, DateEngine.addMonths(today().month, -12));
+  const first = oldest < EARLIEST_MONTH ? EARLIEST_MONTH : oldest;
   const last = DateEngine.addMonths(today().month, MONTHS_AHEAD);
-  return DateEngine.monthsBetween(EARLIEST_MONTH, last > '2028-07' ? last : '2028-07');
+  return DateEngine.monthsBetween(first, last > '2028-07' ? last : '2028-07');
 }
 
 
@@ -1865,7 +1908,7 @@ function renderHeader() {
   role.textContent = unlocked ? (state.account.isOwner ? 'Owner' : 'Editor') : '';
   document.getElementById('unlockBtn').hidden = unlocked;
   const sw = document.getElementById('editSwitch');
-  sw.hidden = !(unlocked && state.account.canWrite);
+  sw.hidden = !(unlocked && state.account.canWrite) || !!state.archiveView;   // an archive is read-only
   sw.setAttribute('aria-checked', String(state.mode === 'edit'));
 
   document.querySelectorAll('#platformFilter button').forEach(b =>
@@ -1875,6 +1918,9 @@ function renderHeader() {
     DateEngine.formatMonth(state.range.from, true) + ' – ' + DateEngine.formatMonth(state.range.to, true);
   if (!state.pending.length && !state.saving) setSaveStatus(null);
   checkKeyReminder();   // Stage 3: shows once per visit, only when the key is within 30 days of expiry
+  renderArchiveChoice();  // Stage 4b: "Showing" (current plan or an archived year) and its banner
+  checkArchivePrompt();   // Stage 4b: owners, from January: "2026 has ended. Archive it now?"
+  checkBackupNudge();     // Stage 4b: editors, after 90 days without a backup on this device
 }
 
 /**
@@ -2294,10 +2340,12 @@ function renderSettings(force) {
   state.settingsDirty.clear();
   state.settingsLastEditable = editable;
   const box = document.getElementById('settingsInner');
-  const intro = state.account && state.account.isOwner && !editable
+  const intro = state.archiveView
+    ? el('div', { class: 'message', attrs: { 'data-tone': 'info' } }, el('div', { class: 'message-text', text: 'You are viewing the ' + state.archiveView + ' archive, so these are the settings it was archived with (read only). Go back to the current plan to change settings.' }))
+    : state.account && state.account.isOwner && !editable
     ? el('div', { class: 'message', attrs: { 'data-tone': 'info' } }, el('div', { class: 'message-text', text: 'Turn on Edit (top right) to change these settings.' }))
     : null;
-  box.replaceChildren(...[intro, renderAccessCard(), settingsCards(editable), renderAboutCard()].flat().filter(Boolean));
+  box.replaceChildren(...[intro, renderAccessCard(), renderKeepSafeCard(), settingsCards(editable), renderAboutCard()].flat().filter(Boolean));
 }
 
 /** The editable (or read-only) cards, in page order. */
@@ -4129,6 +4177,7 @@ function bindControls() {
     setRange(from, to);
   });
   document.getElementById('thisMonthBtn').addEventListener('click', goToThisMonth);
+  document.getElementById('planChoice').addEventListener('change', e => showArchive(e.target.value === 'current' ? null : Number(e.target.value)));
   document.getElementById('refreshBtn').addEventListener('click', () => refreshPlan(true));
   document.getElementById('unlockBtn').addEventListener('click', () => openUnlockDialog(false));
   document.getElementById('unlockConfirm').addEventListener('click', confirmUnlock);
@@ -4288,7 +4337,8 @@ function yearRange(year) {
 /** The choices on the PDFs page, kept between visits (in the page only). */
 function pdfChoices() {
   if (!state.pdf) {
-    const r = yearRange(defaultPdfYear());
+    // Viewing an archive (Stage 4b): its own year; otherwise the year being planned.
+    const r = state.archiveView ? { from: state.archiveView + '-01', to: state.archiveView + '-12' } : yearRange(defaultPdfYear());
     state.pdf = { type: 'group', group: settings().clubs[0].code + '_' + CATEGORY_ORDER[0], club: settings().clubs[0].code,
       platform: 'all', from: r.from, to: r.to, briefings: false };
   }
@@ -4321,7 +4371,7 @@ function renderPdfs() {
   const fromSel = setSelect('From', c.from, months, { id: 'pdfFrom', on: { change: e => { c.from = e.target.value; updatePdfSummary(); } } });
   const toSel = setSelect('To', c.to, months, { id: 'pdfTo', on: { change: e => { c.to = e.target.value; updatePdfSummary(); } } });
   const thisYear = DateEngine.parseMonth(today().month).year;
-  const quick = el('div', { class: 'pdf-quick' },
+  const quick = state.archiveView ? el('p', { class: 'note', text: 'Showing the ' + state.archiveView + ' archive: PDFs cover that year.' }) : el('div', { class: 'pdf-quick' },
     el('span', { class: 'note', text: 'Quick choice:' }),
     [thisYear, thisYear + 1].map(y => el('button', { type: 'button', class: 'btn', text: String(y),
       on: { click: () => { Object.assign(c, yearRange(y)); renderPdfs(); } } })),
@@ -4833,8 +4883,444 @@ const PdfDraw = (() => {
 
 
 /* =====================================================================
-   10. BACKUP AND RESTORE — Stage 4b.
+   10. BACKUP, HISTORY AND THE YEARLY ARCHIVE (Stage 4b)
+   - Download backup: the plan as saved, as a .json file to keep (e.g. in
+     OneDrive). Each device remembers when it last made one and, for editors,
+     nudges after 90 days without.
+   - Restore from a backup file (owners): checks the file, shows what it holds,
+     then saves it as a new version. One 'plan' operation (section 5), so it
+     can be undone and the previous version stays in GitHub's history.
+   - History (owners): the last 30 saves of the plan file, from GitHub's list
+     of commits. Any one can be viewed, downloaded or restored.
+   - Yearly archive (owners, decided 17 Oct 2026): by calendar year, only when
+     the owner confirms. From January the board asks "2026 has ended. Archive
+     it now?". Archiving copies that year's sessions (and their topics) into
+     data/archive/2026.json in the same repository, then removes them from the
+     live plan in one save. A topic that also has later sessions stays live.
+     The archive file is written first and merged, never overwritten, so
+     archiving again (or after an Undo) is always safe.
+   - Viewing an archive: "Showing" in the second header bar picks a year; the
+     board and the PDFs page then show that year, read-only.
    ===================================================================== */
+
+const BACKUP_NUDGE_DAYS = 90;
+const HISTORY_COUNT = 30;
+
+/** Path of a year's archive file in the repository. */
+function archivePath(year) { return 'data/archive/' + year + '.json'; }
+
+/** Contents API path for any file in the repository. */
+function repoContentsPath(path) { return '/repos/' + REPO.owner + '/' + REPO.name + '/contents/' + path; }
+
+/** The settings of the current plan, even while an archived year is on show. */
+function liveSettings() { return (state.archiveView ? state.livePlan : state.plan).settings; }
+
+/** "12 topics and 30 sessions, saved Thu 15 Oct 2026 by bernieonline" */
+function planSummary(data) {
+  const meta = data.meta || {};
+  const t = Object.keys(data.topics || {}).length, n = Object.keys(data.sessions || {}).length;
+  const when = meta.savedAt ? new Date(meta.savedAt).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  return t + (t === 1 ? ' topic' : ' topics') + ' and ' + n + (n === 1 ? ' session' : ' sessions') +
+    (when ? ', saved ' + when + (meta.savedBy ? ' by ' + meta.savedBy : '') : '');
+}
+
+/* --- Backup ------------------------------------------------------------------ */
+
+/**
+ * Download the plan as last saved to GitHub (changes still waiting to save
+ * are not in it). The file is the same as data/plan.json, so it can be
+ * restored here, or put back on GitHub by hand if ever needed.
+ */
+function downloadBackup() {
+  const data = state.remote.data;
+  const name = 'Topic Planning Board backup ' + today().date + (IS_TEST_COPY ? ' (test copy)' : '') + '.json';
+  downloadBlob(new Blob([JSON.stringify(data, null, 2) + '\n'], { type: 'application/json' }), name);
+  storeSet(STORE.lastBackup, today().date);
+  document.querySelectorAll('[data-backup-nudge]').forEach(n => n.remove());
+  toast(state.pending.length ? 'Backup downloaded. Changes still saving are not in it; download again once saved.' : 'Backup downloaded. Keep it somewhere safe, such as OneDrive.');
+  if (state.view === 'settings') renderSettings();
+}
+
+/** Editors: a reminder once per visit when this device has made no backup for 90 days. */
+function checkBackupNudge() {
+  if (!state.account || !state.account.canWrite || state.backupNudgeShown || state.archiveView) return;
+  let since = storeGet(STORE.lastBackup);
+  if (!DateEngine.parseDate(since)) {
+    // Never made one here: start counting from the first visit, rather than nagging at once.
+    since = storeGet(STORE.backupSeen);
+    if (!DateEngine.parseDate(since)) { storeSet(STORE.backupSeen, today().date); return; }
+  }
+  if (-daysUntil(since) < BACKUP_NUDGE_DAYS) return;
+  state.backupNudgeShown = true;
+  const box = el('div', { class: 'message', attrs: { 'data-tone': 'info', 'data-backup-nudge': '' } },
+    el('div', { class: 'message-text', text: 'No backup of the plan has been downloaded on this device for over ' + BACKUP_NUDGE_DAYS + ' days. A copy in OneDrive is a good safeguard.' }),
+    el('button', { type: 'button', class: 'btn', on: { click: downloadBackup } }, 'Download backup'),
+    el('button', { type: 'button', class: 'btn btn-quiet', on: { click: () => box.remove() } }, 'Later'));
+  document.getElementById('messages').append(box);
+}
+
+/* --- Restoring a whole plan (backup file or earlier version) ----------------------- */
+
+/**
+ * Replace the plan with another copy as one undoable change. Years already
+ * archived are kept in the list (their archive files are untouched), so an
+ * older copy never hides an archive.
+ */
+function restorePlan(data, label) {
+  const before = planBody(state.plan);
+  const after = clone(planBody(withDefaults(clone(data))));
+  const archived = new Set([...(state.plan.settings.archivedYears || []), ...(after.settings.archivedYears || [])]);
+  if (archived.size) after.settings.archivedYears = [...archived].sort();
+  if (stableJson(before) === stableJson(after)) { toast('That copy is the same as the plan now. Nothing to restore.'); return false; }
+  commit([makeOp('plan', 'plan', before, after)], label);
+  state.pick = null; state.prompt = null; state.cursorKey = null;
+  toast('Restored. Undo (on the Board page) puts back the plan as it was.');
+  render();
+  return true;
+}
+
+/** Owners: choose a backup file, check it, confirm, restore. */
+function chooseBackupFile() {
+  // A file input not added to the page: click() opens the device's file picker
+  // (on the iPad: Files, including OneDrive). accept narrows the picker to .json.
+  const input = el('input', { type: 'file', accept: '.json,application/json' });
+  input.addEventListener('change', () => { if (input.files[0]) restoreFromFile(input.files[0]); });
+  input.click();
+}
+async function restoreFromFile(file) {
+  let data;
+  try { data = JSON.parse(await file.text()); }   // file.text() reads the whole file as text
+  catch (e) { await ask('Not a backup file', '“' + file.name + '” could not be read as a plan backup.', [['ok', 'OK', 'btn-dark']]); return; }
+  const problems = validatePlan(data);
+  if (!problems.length && data.meta.kind === 'archive') problems.push('This is a year’s archive file, not a backup of the plan.');
+  if (problems.length) { await ask('Not a backup file', '“' + file.name + '”: ' + problems.join(' '), [['ok', 'OK', 'btn-dark']]); return; }
+  const answer = await ask('Replace the plan with this backup?',
+    '“' + file.name + '” holds ' + planSummary(data) + '. The plan on the board now (' + planSummary(state.plan) +
+    ') will be replaced. The current version stays in GitHub’s history, and Undo can reverse this.',
+    [['cancel', 'Cancel'], ['restore', 'Replace the plan', 'btn-dark']]);
+  if (answer === 'restore') restorePlan(data, 'Restore from backup file ' + file.name);
+}
+
+/* --- History -------------------------------------------------------------------- */
+
+/**
+ * The last 30 saves of the plan file.
+ * GET /repos/{owner}/{repo}/commits lists commits; path= limits it to commits
+ * that changed the plan file, sha= names the branch, per_page= how many.
+ */
+async function loadHistory() {
+  const box = document.getElementById('historyList');
+  if (box) box.replaceChildren(el('p', { class: 'note', text: 'Loading the history from GitHub…' }));
+  try {
+    const res = await github('/repos/' + REPO.owner + '/' + REPO.name + '/commits?path=' + encodeURIComponent(REPO.dataPath) +
+      '&sha=' + encodeURIComponent(REPO.branch) + '&per_page=' + HISTORY_COUNT);
+    if (!res.ok) throw new Error('GitHub could not send the history (' + res.status + ').');
+    state.history = (await res.json()).map(c => ({
+      sha: c.sha,
+      date: (c.commit.committer || c.commit.author).date,
+      who: (c.author && c.author.login) || c.commit.author.name,
+      message: String(c.commit.message || '').split('\n')[0]
+    }));
+  } catch (err) {
+    if (err instanceof KeyError) { handleKeyRejected(err.message); return; }
+    state.history = null;
+    if (box) box.replaceChildren(el('p', { class: 'card-error', text: err.message }));
+    return;
+  }
+  drawHistory();
+}
+
+/** Draw the loaded history list into the Settings card. */
+function drawHistory() {
+  const box = document.getElementById('historyList');
+  if (!box || !state.history) return;
+  const fmt = d => new Date(d).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  box.replaceChildren(state.history.length
+    ? el('div', { class: 'history-list' }, state.history.map((h, i) => el('div', { class: 'history-row' },
+        el('div', { class: 'history-text' },
+          el('strong', { text: fmt(h.date) + (i === 0 ? ' (latest)' : '') }),
+          el('span', { class: 'note', text: h.who }),
+          el('span', { text: h.message })),
+        el('button', { type: 'button', class: 'btn', on: { click: () => viewVersion(h, i === 0) } }, 'View'))))
+    : el('p', { class: 'note', text: 'No saves found.' }));
+}
+
+/** The plan file exactly as it was at one save. ?ref= asks for the file at that commit. */
+async function fetchPlanVersion(sha) {
+  const res = await github(contentsPath() + '?ref=' + encodeURIComponent(sha));
+  if (!res.ok) throw new Error('GitHub could not send that version (' + res.status + ').');
+  const body = await res.json();
+  if (!body.content) throw new Error('That version is too large for GitHub to send.');
+  return JSON.parse(fromBase64(body.content));
+}
+
+/** Show what one saved version holds, with Download and (owners, Edit on) Restore. */
+async function viewVersion(h, latest) {
+  let data;
+  try { data = await fetchPlanVersion(h.sha); }
+  catch (err) { if (err instanceof KeyError) { handleKeyRejected(err.message); return; } toast(err.message); return; }
+  const problems = validatePlan(data);
+  const when = new Date(h.date).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  const buttons = [['close', 'Close'], ['download', 'Download this version']];
+  if (!problems.length && !latest && canEditSettings()) buttons.push(['restore', 'Restore this version', 'btn-dark']);
+  const answer = await ask('Saved ' + when,
+    '“' + h.message + '” by ' + h.who + '. ' + (problems.length ? 'This version could not be read: ' + problems.join(' ') : 'It holds ' + planSummary(data) + '.') +
+    (latest ? ' This is the current version.' : canEditSettings() ? ' Restoring saves it as a new version; the plan as it is now stays in the history.' : ' Turn on Edit to restore it.'),
+    buttons);
+  if (answer === 'download') {
+    const day = new Date(h.date).toISOString().slice(0, 10);
+    downloadBlob(new Blob([JSON.stringify(data, null, 2) + '\n'], { type: 'application/json' }), 'Topic Planning Board version ' + day + ' ' + h.sha.slice(0, 7) + '.json');
+  }
+  if (answer === 'restore') restorePlan(data, 'Restore the version saved ' + when);
+}
+
+/* --- Yearly archive ---------------------------------------------------------------- */
+
+/**
+ * Years that can be archived: finished calendar years still holding sessions
+ * in the live plan. The test copy may also archive the current year, so the
+ * feature can be tried before January.
+ */
+function archivableYears(allowCurrent) {
+  const thisYear = DateEngine.parseMonth(today().month).year;
+  const years = new Set(Object.values(state.plan.sessions).map(s => Number(s.date.slice(0, 4))));
+  return [...years].filter(y => y < thisYear || (allowCurrent && y === thisYear)).sort();
+}
+
+/**
+ * What archiving a year moves: every live session dated in that year or
+ * earlier, with a copy of each of their topics. Topics with no session after
+ * the year leave the live plan; those also taught later stay (their copy in
+ * the archive keeps that year's sessions readable).
+ */
+function archivePart(year) {
+  const end = year + '-12-31';
+  const sessions = {}, topics = {};
+  Object.entries(state.plan.sessions).forEach(([k, s]) => {
+    if (s.date > end) return;
+    sessions[k] = clone(s);
+    if (state.plan.topics[s.topicId]) topics[s.topicId] = clone(state.plan.topics[s.topicId]);
+  });
+  const leaving = Object.keys(topics).filter(id => !Object.values(state.plan.sessions).some(s => s.topicId === id && s.date > end));
+  return { sessions, topics, leaving, staying: Object.keys(topics).length - leaving.length };
+}
+
+/** Read a year's archive file through the API, or null if there is none yet. */
+async function fetchArchiveFromApi(year) {
+  const res = await github(repoContentsPath(archivePath(year)) + '?ref=' + encodeURIComponent(REPO.branch));
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('GitHub could not send the ' + year + ' archive (' + res.status + ').');
+  const body = await res.json();
+  return { sha: body.sha, data: JSON.parse(fromBase64(body.content)) };
+}
+
+/**
+ * Archive a year, after the owner confirms.
+ * 1. Write data/archive/YEAR.json: the year's sessions and their topics, merged
+ *    into the file if it already exists, plus the settings of the time (group
+ *    names and colours, so the archive shows as it was).
+ * 2. Remove those sessions, and topics with no later sessions, from the live
+ *    plan, and add the year to settings.archivedYears, as one save (one Undo).
+ */
+async function archiveYear(year) {
+  if (!state.account || !state.account.isOwner) return;
+  if (state.pending.length || state.saving) { toast('Please wait until the changes on screen have saved, then try again.'); return; }
+  const part = archivePart(year);
+  const n = Object.keys(part.sessions).length;
+  if (!n) { toast('There is nothing from ' + year + ' left to archive.'); return; }
+  const answer = await ask('Archive ' + year + '?',
+    'This moves ' + n + (n === 1 ? ' session' : ' sessions') + ' from ' + year + (Object.values(part.sessions).some(s => s.date < year + '-01-01') ? ' and earlier' : '') +
+    ', and ' + part.leaving.length + (part.leaving.length === 1 ? ' topic' : ' topics') + ', into a separate archive file. They leave the board and the topic tray, ' +
+    'but can still be viewed, and their PDFs made, by choosing “' + year + ' archive” under Showing at the top of the board.' +
+    (part.staying ? ' ' + part.staying + (part.staying === 1 ? ' topic that also has' : ' topics that also have') + ' later sessions stay on the board with those sessions.' : '') +
+    ' Undo puts them back on the board; the archive keeps its copy.',
+    [['cancel', 'Not yet'], ['archive', 'Archive ' + year, 'btn-dark']]);
+  if (answer !== 'archive') return;
+  setSaveStatus('saving');
+  try {
+    // 1. The archive file. A clash (someone saved it meanwhile) is retried on the newer copy.
+    for (let attempt = 0; ; attempt++) {
+      const existing = await fetchArchiveFromApi(year);
+      const archive = existing ? existing.data : { meta: { format: DATA_FORMAT, version: DATA_VERSION, kind: 'archive', year }, topics: {}, sessions: {} };
+      Object.assign(archive.topics, part.topics);
+      Object.assign(archive.sessions, part.sessions);
+      archive.settings = clone(settings());
+      delete archive.settings.archivedYears;
+      archive.meta = Object.assign(archive.meta, { archivedAt: new Date().toISOString(), archivedBy: state.account.login });
+      // PUT creates the file, or updates it when the sha of the version it replaces is given.
+      const res = await github(repoContentsPath(archivePath(year)), { method: 'PUT', body: Object.assign({
+        message: 'Archive ' + year + ': ' + n + (n === 1 ? ' session' : ' sessions'),
+        content: toBase64(JSON.stringify(archive, null, 2) + '\n'),
+        branch: REPO.branch
+      }, existing ? { sha: existing.sha } : {}) });
+      if ((res.status === 409 || res.status === 422) && attempt < 3) continue;
+      if (res.status === 403 || res.status === 404) throw new KeyError('This key is not allowed to save to the ' + REPO.name + ' repository.');
+      if (!res.ok) throw new Error('GitHub could not save the archive file (' + res.status + ').');
+      break;
+    }
+  } catch (err) {
+    setSaveStatus('saved');
+    if (err instanceof KeyError) { handleKeyRejected(err.message); return; }
+    await ask('Not archived', 'Nothing was changed: ' + (err instanceof TypeError ? 'GitHub could not be reached.' : err.message), [['ok', 'OK', 'btn-dark']]);
+    return;
+  }
+  // 2. The live plan: one action, saved and undone together.
+  const ops = Object.entries(part.sessions).map(([k, s]) => makeOp('session', k, s, null));
+  part.leaving.forEach(id => ops.push(makeOp('topic', id, state.plan.topics[id], null)));
+  const s0 = settings();
+  const s1 = Object.assign(clone(s0), { archivedYears: [...new Set([...(s0.archivedYears || []), year])].sort() });
+  ops.push(makeOp('settings', 'settings', s0, s1));
+  commit(ops, 'Archive ' + year);
+  state.archivePromptShown = true;
+  document.querySelectorAll('[data-archive-prompt]').forEach(m => m.remove());
+  toast(year + ' archived. View it with Showing → ' + year + ' archive.');
+  render();
+}
+
+/** Owners: from January, once per visit, offer to archive the year just ended. */
+function checkArchivePrompt() {
+  if (!state.account || !state.account.isOwner || !state.account.canWrite || state.archivePromptShown || state.archiveView) return;
+  const years = archivableYears(false);
+  if (!years.length) return;
+  state.archivePromptShown = true;
+  const year = years[years.length - 1];
+  const box = el('div', { class: 'message', attrs: { 'data-tone': 'info', 'data-archive-prompt': '' } },
+    el('div', { class: 'message-text', text: (years.length > 1 ? years.join(' and ') + ' have' : year + ' has') +
+      ' ended. Archive ' + (years.length > 1 ? 'them' : 'it') + ' now? The sessions move to a separate archive file, keeping the board and the topic tray short. Nothing moves until you confirm.' }),
+    el('button', { type: 'button', class: 'btn btn-dark', on: { click: () => { box.remove(); archiveYear(year); } } }, 'Archive now'),
+    el('button', { type: 'button', class: 'btn btn-quiet', on: { click: () => box.remove() } }, 'Not yet'));
+  document.getElementById('messages').append(box);
+}
+
+/* --- Viewing an archived year --------------------------------------------------------- */
+
+/**
+ * Load a year's archive. Everyone reads the published copy from this site;
+ * an editor who has only just archived (GitHub Pages takes a minute or two to
+ * publish) falls back to reading it through the API.
+ */
+async function loadArchive(year) {
+  let data = null;
+  try {
+    const res = await fetch(archivePath(year) + '?t=' + Date.now(), { cache: 'no-store' });
+    if (res.ok) data = await res.json();
+  } catch (e) { /* try the API below */ }
+  if (!data && state.key && state.account) { const got = await fetchArchiveFromApi(year); data = got && got.data; }
+  if (!data) throw new Error('The ' + year + ' archive could not be loaded. If it was archived a moment ago, try again in a minute or two.');
+  if (!data.meta || data.meta.format !== DATA_FORMAT || data.meta.kind !== 'archive' || !data.topics || !data.sessions) throw new Error('The ' + year + ' archive file could not be read.');
+  return withDefaults(data);
+}
+
+/** Show an archived year, read-only; null goes back to the current plan. */
+async function showArchive(year) {
+  if (!year) { leaveArchive(); return; }
+  if (state.pending.length || state.saving) {
+    toast('Please wait until the changes on screen have saved.');
+    document.getElementById('planChoice').value = state.archiveView || 'current';
+    return;
+  }
+  let data;
+  try { data = await loadArchive(year); }
+  catch (err) { toast(err.message); document.getElementById('planChoice').value = state.archiveView || 'current'; return; }
+  if (!state.archiveView) { state.livePlan = state.plan; state.liveRange = state.range; state.liveMode = state.mode; }
+  state.archiveView = year;
+  state.plan = data;
+  state.mode = 'view';
+  state.pick = null; state.prompt = null; state.cursorKey = null; state.trayOverlay = false;
+  state.range = { from: year + '-01', to: year + '-12' };
+  state.pdf = null;                       // the PDFs page starts on the archived year
+  if (document.getElementById('detailsSheet').open) closeDetails();
+  if (state.view === 'pdfs') renderPdfs();
+  render();
+  toast('Showing the ' + year + ' archive (read only).');
+}
+
+/** Back to the current plan, as it now is. */
+function leaveArchive() {
+  if (!state.archiveView) return;
+  state.archiveView = null;
+  state.plan = state.livePlan;
+  state.livePlan = null;
+  state.range = state.liveRange || state.range;
+  state.mode = state.liveMode || 'view';
+  state.pdf = null;
+  rebuildLocalPlan();                     // takes in anything saved meanwhile, and redraws
+  if (state.view === 'pdfs') renderPdfs();
+  refreshPlan(false);
+}
+
+/** The "Showing" choice and the archive banner in the header (called by renderHeader). */
+function renderArchiveChoice() {
+  const years = (liveSettings().archivedYears || []).slice().sort().reverse();
+  const wrap = document.getElementById('planChoiceWrap');
+  wrap.hidden = !years.length && !state.archiveView;
+  const sel = document.getElementById('planChoice');
+  const want = ['current'].concat(years.map(String));
+  if ([...sel.options].map(o => o.value).join() !== want.join()) {
+    sel.replaceChildren(...want.map(v => el('option', { value: v, text: v === 'current' ? 'Current plan' : v + ' archive' })));
+  }
+  sel.value = state.archiveView ? String(state.archiveView) : 'current';
+  document.getElementById('thisMonthBtn').hidden = !!state.archiveView;
+  let banner = document.getElementById('archiveBanner');
+  if (state.archiveView && !banner) {
+    banner = el('div', { class: 'message', id: 'archiveBanner', attrs: { 'data-tone': 'info' } },
+      el('div', { class: 'message-text', id: 'archiveBannerText' }),
+      el('button', { type: 'button', class: 'btn btn-dark', on: { click: leaveArchive } }, 'Back to the current plan'));
+    document.getElementById('messages').prepend(banner);
+  }
+  if (banner && !state.archiveView) banner.remove();
+  if (banner && state.archiveView) document.getElementById('archiveBannerText').textContent =
+    'Showing the ' + state.archiveView + ' archive: read only. Tiles open their details; PDFs of this year can be made from the PDFs page.';
+}
+
+/* --- The Settings card ---------------------------------------------------------------- */
+
+/** "Backup, history and archive": shown to anyone unlocked; history and archive to owners. */
+function renderKeepSafeCard() {
+  const acct = state.account;
+  if (!acct) return null;
+  const owner = acct.isOwner;
+  const card = el('section', { class: 'card keep-safe', attrs: { 'data-card': 'keepsafe' } }, el('h2', { text: 'Backup, history and archive' }));
+  if (state.archiveView) {
+    card.append(el('p', { class: 'note', text: 'You are viewing the ' + state.archiveView + ' archive. Go back to the current plan to make a backup, see the history or archive a year.' }));
+    return card;
+  }
+  // Backup
+  const last = storeGet(STORE.lastBackup);
+  const lastText = DateEngine.parseDate(last)
+    ? DateEngine.formatDayDate(last, true) + (daysUntil(last) === 0 ? ' (today)' : ' (' + -daysUntil(last) + (daysUntil(last) === -1 ? ' day ago)' : ' days ago)'))
+    : 'none yet';
+  card.append(
+    el('h3', { text: 'Backup' }),
+    el('p', { text: 'Download a copy of the whole plan to keep, for example in OneDrive. GitHub keeps every save too, so this is an extra safeguard.' }),
+    el('p', { class: 'note', text: 'Last backup downloaded on this device: ' + lastText + '.' }),
+    el('div', { class: 'actions' },
+      el('button', { type: 'button', class: 'btn btn-dark', on: { click: downloadBackup } }, icon('doc'), 'Download backup'),
+      owner ? el('button', { type: 'button', class: 'btn', disabled: !canEditSettings(), title: canEditSettings() ? '' : 'Turn on Edit to restore',
+        on: { click: chooseBackupFile } }, 'Restore from a backup file…') : null));
+  if (!owner) return card;
+  // History
+  const list = el('div', { id: 'historyList' });
+  card.append(
+    el('h3', { text: 'History' }),
+    el('p', { text: 'Every save is kept on GitHub. View any of the last ' + HISTORY_COUNT + ' saves, download it, or restore it as a new version.' }),
+    list,
+    el('div', { class: 'actions' }, el('button', { type: 'button', class: 'btn', on: { click: loadHistory } }, icon('refresh'), state.history ? 'Reload the history' : 'Show recent saves')));
+  // Archive
+  const years = archivableYears(IS_TEST_COPY);
+  const done = (settings().archivedYears || []);
+  card.append(
+    el('h3', { text: 'Yearly archive' }),
+    el('p', { text: 'Once a year ends, its sessions can move to a separate archive file, keeping the board and the topic tray short. Archived years can still be viewed, and their PDFs made, by choosing them under Showing at the top of the board. From January the board asks; nothing moves until you confirm.' }),
+    done.length ? el('p', { class: 'note', text: 'Archived so far: ' + done.join(', ') + '.' }) : null,
+    years.length
+      ? el('div', { class: 'actions' }, years.map(y => el('button', { type: 'button', class: 'btn', disabled: !canEditSettings(),
+          title: canEditSettings() ? '' : 'Turn on Edit to archive', on: { click: () => archiveYear(y) } }, 'Archive ' + y + '…')))
+      : el('p', { class: 'note', text: 'Nothing to archive yet.' }),
+    IS_TEST_COPY ? el('p', { class: 'note', text: 'Test copy only: the current year can be archived too, so this can be tried before January.' }) : null);
+  setTimeout(drawHistory, 0);   // redraw a history list already loaded
+  return card;
+}
 
 
 /* =====================================================================
@@ -4848,7 +5334,7 @@ const PdfDraw = (() => {
  * while changes are queued, because runSave already deals with newer copies.
  */
 async function refreshPlan(byHand) {
-  if (!state.plan || state.saving || state.pending.length || state.drag) return;
+  if (!state.plan || state.saving || state.pending.length || state.drag || state.archiveView) return;
   try {
     if (state.account) {
       const latest = await fetchPlanFromApi(state.remote.etag);
