@@ -541,6 +541,30 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 @media (max-width: 760px) { .set-grid-4, .set-grid-times { grid-template-columns: 1fr 1fr; } }
 .danger-zone { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
 
+/* --- Key help (Nice to Have 10) ----------------------------------------------
+   A wider dialog whose middle scrolls, so the buttons at the foot stay in view
+   on an iPad. flex column + min-height: 0 on the body is what lets it scroll. */
+dialog.help-dialog { width: min(680px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); }
+dialog.help-dialog[open] { display: flex; flex-direction: column; }
+.help-body { overflow: auto; min-height: 0; flex: 1; -webkit-overflow-scrolling: touch; gap: 4px; }
+.help-body section { padding: 10px 0 6px; border-top: 1px solid var(--line); }
+.help-body h3 { margin: 0 0 6px; font-size: 17px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.help-body p { margin: 6px 0; line-height: 1.5; }
+.help-body ol, .help-body ul { margin: 6px 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 6px; line-height: 1.5; }
+.help-time { font-size: 13px; font-weight: 400; color: var(--muted); }
+.help-note { font-size: 14px; color: var(--muted); }
+.help-toc { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 10px; }
+.help-toc a {
+  font-size: 14px; text-decoration: none; color: var(--bronze-deep);
+  background: var(--bronze-chip); border: 1px solid #D9C3A0; border-radius: 999px; padding: 4px 12px;
+}
+.help-toc a:hover { background: var(--bronze-soft); }
+.help-kv { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr; gap: 6px 14px; margin: 8px 0; font-size: 15px; }
+.help-kv dt { color: var(--muted); }
+.help-kv dd { margin: 0; }
+.key-help-btn { color: var(--bronze-ink); padding: 0 10px; }
+@media (max-width: 560px) { .help-kv { grid-template-columns: 1fr; } .help-kv dd { margin-bottom: 6px; } }
+
 /* --- Fit the board to the iPad's width (Nice to Have 1) ----------------------
    iPad landscape is about 1,180 px wide. Up to 1,300 px the month column and the
    group columns narrow (each group column may shrink to 7rem = 112 px), so all
@@ -687,13 +711,97 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
       </label>
     </div>
     <div class="dlg-foot">
-      <a id="guideLink" target="_blank" rel="noopener noreferrer">How to make a key</a>
+      <!-- Nice to Have 10: the plain-English guide to the key, in the board itself. -->
+      <button type="button" class="btn btn-quiet key-help-btn" id="unlockKeyHelp"><span class="icon" data-icon="help"></span>Key help</button>
       <div class="right">
         <button type="submit" value="cancel" class="btn" formnovalidate>Cancel</button>
         <button type="button" class="btn btn-dark" id="unlockConfirm">Unlock</button>
       </div>
     </div>
   </form>
+</dialog>
+
+<!-- =====================================================================
+     Key help (Nice to Have 10)
+     A plain-English guide to the editing key: why there is one, how to renew
+     it each year, what to do if it has expired, and how to make a new one.
+     It is written here in the page (not loaded from GitHub), so it opens
+     even when GitHub cannot be reached. Opened by openKeyHelp() from
+     Settings → Editing access, the renewal reminder and the Unlock box.
+     ===================================================================== -->
+<dialog id="keyHelpDialog" class="help-dialog" aria-labelledby="keyHelpTitle">
+  <div class="dlg-head">
+    <h2 id="keyHelpTitle">Key help — the editing key</h2>
+    <button type="button" class="btn btn-quiet btn-icon" data-close-help aria-label="Close"><span class="icon" data-icon="close"></span></button>
+  </div>
+  <div class="dlg-body help-body" id="keyHelpBody">
+    <nav class="help-toc" aria-label="Sections">
+      <a href="#kh-why">Why there is a key</a>
+      <a href="#kh-renew">Renewing it each year</a>
+      <a href="#kh-expired">If it has expired</a>
+      <a href="#kh-new">Making a new key</a>
+      <a href="#kh-safe">Keeping it safe</a>
+    </nav>
+
+    <section id="kh-why">
+      <h3>1. Why there is a key</h3>
+      <p>Members only read the board, so they need no account and no key.</p>
+      <p>Saving a change means writing to the plan file kept on GitHub, and GitHub only allows that with proof of who you are. The key is that proof. It is made in your GitHub account and pasted into the board once on each device you edit from.</p>
+      <ul>
+        <li>It works only for the <strong>planner</strong> and <strong>planner-test</strong> repositories, and only for their files. It cannot touch anything else in your GitHub account.</li>
+        <li>It expires (after a year), so a key that is lost or forgotten stops working by itself.</li>
+        <li>Each device remembers it. It is sent only to GitHub and is never stored in the plan.</li>
+      </ul>
+    </section>
+
+    <section id="kh-renew">
+      <h3>2. Renewing it before it expires <span class="help-time">about 5 minutes</span></h3>
+      <p>GitHub emails you about a week before the key expires, and the board shows a reminder from 30 days before.</p>
+      <ol>
+        <li>Press <strong>Open my keys on GitHub</strong> below and sign in if asked.</li>
+        <li>Under <strong>Fine-grained tokens</strong>, choose the planner key.</li>
+        <li>Press <strong>Regenerate token</strong>. Choose the same expiry as before (a year), then confirm.</li>
+        <li>Press the copy button next to the new key straight away. <strong>GitHub shows it only once.</strong> Keeping a copy in your password manager is a good idea.</li>
+        <li>On <strong>each</strong> device you edit from (PC and iPad): open the board, then <strong>Settings → Paste new key</strong>, paste it and press <strong>Unlock</strong>.</li>
+      </ol>
+      <p class="help-note">The old key stops working the moment you regenerate, so a device that still has it will ask for the new one. Nothing is lost.</p>
+    </section>
+
+    <section id="kh-expired">
+      <h3>3. If it has already expired</h3>
+      <p>The board goes view-only and shows a <strong>Paste new key</strong> box. Changes not yet saved stay on that device and save once the new key is in.</p>
+      <p>Regenerate the key as in section 2 (an expired key can still be regenerated), then paste it on each device.</p>
+    </section>
+
+    <section id="kh-new">
+      <h3>4. Making a brand-new key</h3>
+      <p>Only needed if the old key was deleted on GitHub. In your keys on GitHub, press <strong>Generate new token</strong> under Fine-grained tokens, and choose:</p>
+      <dl class="help-kv">
+        <dt>Token name</dt><dd>Planner (any name you will recognise)</dd>
+        <dt>Resource owner</dt><dd><strong>FornhamCC</strong> (not your own name)</dd>
+        <dt>Expiration</dt><dd>A year (the longest offered)</dd>
+        <dt>Repository access</dt><dd>Only select repositories: <strong>planner</strong> and <strong>planner-test</strong></dd>
+        <dt>Permissions</dt><dd>Repository permissions → <strong>Contents: Read and write</strong> (nothing else)</dd>
+      </dl>
+      <p>Press <strong>Generate token</strong>, copy it at once, and paste it into the board on each device. The setup guide has the same steps with more detail.</p>
+    </section>
+
+    <section id="kh-safe">
+      <h3>5. Keeping it safe</h3>
+      <ul>
+        <li>Paste it only into the board (and your password manager). Never email or message it.</li>
+        <li>If you think someone has seen it, or a device is lost, regenerate it on GitHub: the old key stops working at once.</li>
+        <li><strong>Settings → Remove key from this device</strong> makes that device view-only again.</li>
+      </ul>
+    </section>
+  </div>
+  <div class="dlg-foot">
+    <a class="btn" id="keyHelpGuide" target="_blank" rel="noopener noreferrer"><span class="icon" data-icon="doc"></span>Full setup guide</a>
+    <div class="right">
+      <a class="btn" id="keyHelpGitHub" target="_blank" rel="noopener noreferrer"><span class="icon" data-icon="open"></span>Open my keys on GitHub</a>
+      <button type="button" class="btn btn-dark" id="keyHelpPaste">Paste new key</button>
+    </div>
+  </div>
 </dialog>
 
 <!-- Month range dialog -->
@@ -839,7 +947,8 @@ const ICONS = {
   remove: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h11M10 8l4 4-4 4M19 4v16"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
   edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg>',
-  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>'
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>',
+  help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17v.01"/></svg>'
 };
 
 /* Dragging (section 8). On a mouse a drag starts once the pointer has moved a
@@ -2559,6 +2668,34 @@ function daysUntil(date) {
   return Math.round((Date.UTC(b.year, b.month - 1, b.day) - Date.UTC(a.year, a.month - 1, a.day)) / 86400000);
 }
 
+/**
+ * Open the Key help guide (Nice to Have 10). section, if given, is the id of a
+ * section to scroll to, e.g. 'kh-renew' from the renewal reminder or
+ * 'kh-expired' when the key has lapsed. It opens over whatever is showing,
+ * including the Unlock box: a <dialog> opened with showModal() goes on top.
+ */
+function openKeyHelp(section) {
+  const dlg = document.getElementById('keyHelpDialog');
+  if (!dlg.open) dlg.showModal();
+  const body = document.getElementById('keyHelpBody');
+  const target = section ? document.getElementById(section) : null;
+  // Scroll the guide's own middle area (not the page) so the chosen section is at the top.
+  body.scrollTop = target ? target.offsetTop - body.offsetTop : 0;
+}
+
+/** "Paste new key" in the guide: close it and show the Unlock box (already open, or opened now). */
+function keyHelpPaste() {
+  document.getElementById('keyHelpDialog').close();
+  const unlock = document.getElementById('unlockDialog');
+  if (unlock.open) document.getElementById('keyInput').focus();
+  else openUnlockDialog(false);
+}
+
+/** A "Key help" button for Settings and the reminder. */
+function keyHelpButton(section) {
+  return el('button', { type: 'button', class: 'btn btn-quiet key-help-btn', on: { click: () => openKeyHelp(section) } }, icon('help'), 'Key help');
+}
+
 /** Show the renewal reminder at the top of the page, once per visit, when the key is close to expiry. */
 function checkKeyReminder() {
   if (!state.account || state.keyReminderShown) return;
@@ -2574,6 +2711,7 @@ function checkKeyReminder() {
     el('div', { class: 'message-text', text }),
     el('a', { class: 'btn', href: KEY_SETTINGS_URL, target: '_blank', rel: 'noopener noreferrer' }, icon('open'), 'Renew key on GitHub'),
     el('button', { type: 'button', class: 'btn', on: { click: () => { box.remove(); openUnlockDialog(false); } } }, 'Paste new key'),
+    keyHelpButton(days <= 0 ? 'kh-expired' : 'kh-renew'),
     el('button', { type: 'button', class: 'btn btn-quiet', on: { click: () => box.remove() } }, 'Later'));
   document.getElementById('messages').append(box);
 }
@@ -2585,7 +2723,8 @@ function renderAccessCard() {
     access.append(
       el('p', { text: 'This device is view-only. Editors unlock it once with their GitHub access key.' }),
       el('div', { class: 'actions' },
-        el('button', { type: 'button', class: 'btn btn-dark', on: { click: () => openUnlockDialog(false) } }, icon('lock'), 'Unlock editing')));
+        el('button', { type: 'button', class: 'btn btn-dark', on: { click: () => openUnlockDialog(false) } }, icon('lock'), 'Unlock editing'),
+        keyHelpButton()));
     return access;
   }
   const exp = keyExpiry();
@@ -2621,6 +2760,7 @@ function renderAccessCard() {
     el('div', { class: 'actions' },
       el('a', { class: 'btn', href: KEY_SETTINGS_URL, target: '_blank', rel: 'noopener noreferrer' }, icon('open'), 'Renew key on GitHub'),
       el('button', { type: 'button', class: 'btn', on: { click: () => openUnlockDialog(false) } }, 'Paste new key'),
+      keyHelpButton(exp && days <= 0 ? 'kh-expired' : 'kh-renew'),
       el('button', { type: 'button', class: 'btn btn-danger-text', on: { click: removeKey } }, 'Remove key from this device')));
   return access;
 }
@@ -3982,7 +4122,22 @@ function bindControls() {
   document.getElementById('unlockBtn').addEventListener('click', () => openUnlockDialog(false));
   document.getElementById('unlockConfirm').addEventListener('click', confirmUnlock);
   document.getElementById('keyInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); confirmUnlock(); } });
-  document.getElementById('guideLink').href = GUIDE_URL;
+  // --- Key help (Nice to Have 10) ---
+  // In the Unlock box, a lapsed key opens the guide at "If it has expired".
+  document.getElementById('unlockKeyHelp').addEventListener('click', () =>
+    openKeyHelp(document.getElementById('unlockLapsed').hidden ? 'kh-renew' : 'kh-expired'));
+  document.getElementById('keyHelpGuide').href = GUIDE_URL;
+  document.getElementById('keyHelpGitHub').href = KEY_SETTINGS_URL;
+  document.getElementById('keyHelpPaste').addEventListener('click', keyHelpPaste);
+  document.querySelector('#keyHelpDialog [data-close-help]').addEventListener('click', () => document.getElementById('keyHelpDialog').close());
+  // The section chips scroll the guide itself; without this the browser would
+  // change the page address (#kh-…) and might scroll the board behind.
+  document.querySelectorAll('#keyHelpDialog .help-toc a').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    openKeyHelp(a.getAttribute('href').slice(1));
+  }));
+  // Clicking the dim backdrop around the guide closes it (the backdrop click reports the dialog itself).
+  document.getElementById('keyHelpDialog').addEventListener('click', e => { if (e.target.id === 'keyHelpDialog') e.target.close(); });
   document.getElementById('editSwitch').addEventListener('click', () => {
     state.mode = state.mode === 'edit' ? 'view' : 'edit';
     if (state.mode === 'view') { state.pick = null; state.cursorKey = null; state.prompt = null; state.trayOverlay = false; }
