@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-18T17:23:22.748Z",
+    "savedAt": "2026-10-18T17:23:35.874Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -271,6 +271,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-10-18T17:23:20.734Z",
+      "updatedBy": "bernieonline"
+    },
+    "2026-10_FCC_WB": {
+      "topicId": "t_87a2uhpi",
+      "club": "FCC",
+      "category": "WB",
+      "month": "2026-10",
+      "date": "2026-10-20",
+      "start": "12:35",
+      "end": "14:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-10-18T17:23:33.864Z",
       "updatedBy": "bernieonline"
     }
   }
