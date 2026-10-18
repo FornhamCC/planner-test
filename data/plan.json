@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-18T17:26:34.216Z",
+    "savedAt": "2026-10-18T17:27:49.408Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -236,6 +236,16 @@
       "briefing": "",
       "updatedAt": "2026-10-18T17:26:32.207Z",
       "updatedBy": "bernieonline"
+    },
+    "t_zvee84mm": {
+      "title": "shortcuts",
+      "category": "IM",
+      "presenter": "BG",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-10-18T17:27:47.387Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -408,6 +418,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-10-18T17:26:32.210Z",
+      "updatedBy": "bernieonline"
+    },
+    "2026-11_FCC_IM": {
+      "topicId": "t_zvee84mm",
+      "club": "FCC",
+      "category": "IM",
+      "month": "2026-11",
+      "date": "2026-11-24",
+      "start": "14:00",
+      "end": "16:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-10-18T17:27:47.390Z",
       "updatedBy": "bernieonline"
     }
   }
