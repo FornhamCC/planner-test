@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-18T17:26:13.720Z",
+    "savedAt": "2026-10-18T17:26:34.216Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -226,6 +226,16 @@
       "briefing": "",
       "updatedAt": "2026-10-18T17:26:00.611Z",
       "updatedBy": "bernieonline"
+    },
+    "t_yx8ionp2": {
+      "title": "using word",
+      "category": "IB",
+      "presenter": "",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-10-18T17:26:32.207Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -385,6 +395,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-10-18T17:26:11.713Z",
+      "updatedBy": "bernieonline"
+    },
+    "2026-11_FCC_IB": {
+      "topicId": "t_yx8ionp2",
+      "club": "FCC",
+      "category": "IB",
+      "month": "2026-11",
+      "date": "2026-11-24",
+      "start": "12:45",
+      "end": "14:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-10-18T17:26:32.210Z",
       "updatedBy": "bernieonline"
     }
   }
