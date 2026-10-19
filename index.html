@@ -579,6 +579,27 @@ dialog.help-dialog[open] { display: flex; flex-direction: column; }
 .pdf-summary { margin: 0; font-size: 15px; color: var(--ink-2); }
 .pdf-summary:empty { display: none; }
 .card-foot .pdf-status { margin-right: auto; align-self: center; }
+/* --- Simple PDF choices (Stage 4c) --- */
+.pdf-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pdf-more { color: var(--bronze-ink); min-height: 40px; }
+.pdf-trail { font-size: 16px; font-weight: 700; color: var(--bronze-ink); margin: 4px 0 0 !important; }
+.pdf-simple h3 { font-size: 18px; margin: 18px 0 10px; }
+.pdf-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 12px; }
+.pdf-choice { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 4px; min-height: 76px;
+  padding: 14px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); color: var(--ink);
+  font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.pdf-choice:hover { border-color: var(--bronze); background: var(--bronze-soft); }
+.pdf-choice:focus-visible { outline: 3px solid var(--bronze); outline-offset: 2px; }
+.pdf-choice.coloured { background: var(--fill); border-color: var(--line-c); border-top: 6px solid var(--strong); color: var(--ink-c); }
+.pdf-choice.coloured:hover { border-color: var(--strong); background: var(--fill); filter: brightness(.97); }
+.pdf-choice-label { font-size: 19px; font-weight: 700; line-height: 1.25; }
+.pdf-choice-sub { font-size: 14px; color: var(--muted); }
+.year-step { display: flex; align-items: center; gap: 14px; }
+.year-btn { min-width: 52px; min-height: 52px; justify-content: center; padding: 0; }
+.year-value { font-size: 30px; font-weight: 700; min-width: 4ch; text-align: center; font-variant-numeric: tabular-nums; }
+.pdf-simple .card-foot { margin-top: 16px; }
+.pdf-back { margin-right: auto; }
+.pdf-back + .pdf-status { margin-right: auto; }
 @media (max-width: 560px) { .help-kv { grid-template-columns: 1fr; } .help-kv dd { margin-bottom: 6px; } }
 
 /* --- Fit the board to the iPad's width (Nice to Have 1) ----------------------
@@ -4321,12 +4342,6 @@ const PDF_TYPES = [
 ];
 const PDF_MAX_MONTHS = 36;
 
-/** The calendar year the page suggests: from September on, next year (planning ahead); before that, this year. */
-function defaultPdfYear() {
-  const t = DateEngine.parseMonth(today().month);
-  return t.month >= 9 ? t.year + 1 : t.year;
-}
-
 /** January to December of a year, kept within the months the board offers. */
 function yearRange(year) {
   const months = selectableMonths();
@@ -4337,22 +4352,127 @@ function yearRange(year) {
 /** The choices on the PDFs page, kept between visits (in the page only). */
 function pdfChoices() {
   if (!state.pdf) {
-    // Viewing an archive (Stage 4b): its own year; otherwise the year being planned.
-    const r = state.archiveView ? { from: state.archiveView + '-01', to: state.archiveView + '-12' } : yearRange(defaultPdfYear());
     state.pdf = { type: 'group', group: settings().clubs[0].code + '_' + CATEGORY_ORDER[0], club: settings().clubs[0].code,
-      platform: 'all', from: r.from, to: r.to, briefings: false };
+      platform: 'all', from: '', to: '', briefings: false,
+      // Simple choices (Stage 4c): the step shown, and the year the stepper is on.
+      // 'simple' is false while "More options" (the full page below) is open.
+      simple: true, step: 'club', year: null };
+    // Both versions of the page start on the current calendar year (an archive: its own year).
+    setPdfYear(state.pdf, state.archiveView ? Number(state.archiveView) : thisCalendarYear());
   }
   return state.pdf;
 }
 
-/** Draw the PDFs page from the current choices. */
-function renderPdfs() {
+/* --- Simple choices (Stage 4c) ------------------------------------------------
+   Members choose in up to three short steps, each a row of large buttons:
+     1. Club:  each club, or Both clubs (both = the whole plan, straight to step 3)
+     2. Group: that club's four groups in their board colours, or All four groups
+     3. Year:  the current year, with ‹ › to step through years, then Make PDF
+   The choices map onto the same PDF types as the full page, so the PDFs are
+   identical: one group → 'group', all four → 'club', both clubs → 'whole'.
+   "More options" opens the full page (renderPdfsAdvanced) with the same choices. */
+
+function thisCalendarYear() { return DateEngine.parseMonth(today().month).year; }
+
+/** The first and last years the year stepper may show (the months the board offers). */
+function pdfYearBounds() {
+  const months = selectableMonths();
+  return { min: DateEngine.parseMonth(months[0]).year, max: DateEngine.parseMonth(months[months.length - 1]).year };
+}
+
+/** Put a year's January to December into the choices. */
+function setPdfYear(c, year) {
+  const b = pdfYearBounds();
+  c.year = Math.min(b.max, Math.max(b.min, year));
+  Object.assign(c, state.archiveView ? { from: state.archiveView + '-01', to: state.archiveView + '-12' } : yearRange(c.year));
+}
+
+/** A large choice button. colours (optional) paints it like the board's group headers. */
+function pdfChoiceButton(label, sub, onClick, cat) {
+  return el('button', { type: 'button', class: 'pdf-choice' + (cat ? ' coloured' : ''), vars: cat ? colourVars(cat) : null,
+    on: { click: onClick } }, el('span', { class: 'pdf-choice-label', text: label }), sub ? el('span', { class: 'pdf-choice-sub', text: sub }) : null);
+}
+
+/** Draw the simple choices for the current step. */
+function renderPdfsSimple(box) {
   const c = pdfChoices();
   const s = settings();
+  const go = (changes) => { Object.assign(c, changes); renderPdfs(); };
+  const back = (step) => el('button', { type: 'button', class: 'btn btn-quiet pdf-back', on: { click: () => go({ step }) } }, icon('left'), 'Back');
+  const more = el('button', { type: 'button', class: 'btn btn-quiet pdf-more', id: 'pdfMore', on: { click: () => go({ simple: false }) } }, 'More options…');
+
+  // What has been chosen so far, e.g. "Fornham Computer Club › FCC iPad Beginners"
+  const trail = [];
+  if (c.step !== 'club') trail.push(c.type === 'whole' ? 'Both clubs' : clubOf(c.club).name);
+  if (c.step === 'make' && c.type === 'group') trail.push(groupName(...c.group.split('_')));
+  if (c.step === 'make' && c.type === 'club') trail.push('All four groups');
+  const trailLine = trail.length ? el('p', { class: 'pdf-trail', id: 'pdfTrail', text: trail.join(' › ') }) : null;
+
+  let body;
+  if (c.step === 'club') {
+    body = [el('h3', { text: 'Which club?' }),
+      el('div', { class: 'pdf-choices', id: 'pdfClubChoices' },
+        s.clubs.map(k => pdfChoiceButton(k.name, null, () => go({ club: k.code, step: 'group' }))),
+        pdfChoiceButton('Both clubs', 'The whole plan, every group', () => go({ type: 'whole', platform: 'all', step: 'make' })))];
+  } else if (c.step === 'group') {
+    body = [el('h3', { text: 'Which group?' }),
+      el('div', { class: 'pdf-choices', id: 'pdfGroupChoices' },
+        CATEGORY_ORDER.map(cat => pdfChoiceButton(groupName(c.club, cat), null,
+          () => go({ type: 'group', group: c.club + '_' + cat, step: 'make' }), categoryOf(cat))),
+        pdfChoiceButton('All four groups', 'Side by side, one row per month', () => go({ type: 'club', step: 'make' }))),
+      el('div', { class: 'card-foot' }, back('club'))];
+  } else {
+    if (!c.year) setPdfYear(c, thisCalendarYear());
+    const b = pdfYearBounds();
+    const fixed = !!state.archiveView;
+    const step = (d) => { setPdfYear(c, c.year + d); renderPdfs(); };
+    const yearBox = el('div', { class: 'year-step', attrs: { role: 'group', 'aria-label': 'Year' } },
+      fixed ? null : el('button', { type: 'button', class: 'btn year-btn', id: 'pdfYearPrev', disabled: c.year <= b.min,
+        attrs: { 'aria-label': 'Previous year' }, on: { click: () => step(-1) } }, icon('left')),
+      el('span', { class: 'year-value', id: 'pdfYear', attrs: { 'aria-live': 'polite' }, text: String(c.year) }),
+      fixed ? null : el('button', { type: 'button', class: 'btn year-btn', id: 'pdfYearNext', disabled: c.year >= b.max,
+        attrs: { 'aria-label': 'Next year' }, on: { click: () => step(1) } }, icon('right')));
+    const briefings = c.type === 'group' ? el('label', { class: 'check-row' },
+      el('input', { type: 'checkbox', id: 'pdfBriefings', checked: c.briefings, on: { change: e => { c.briefings = e.target.checked; } } }),
+      el('span', { text: 'Include each topic’s members’ briefing' })) : null;
+    body = [el('h3', { text: 'Which year?' }), yearBox,
+      fixed ? el('p', { class: 'note', text: 'Showing the ' + state.archiveView + ' archive: PDFs cover that year.' }) : null,
+      briefings,
+      el('p', { class: 'pdf-summary', id: 'pdfSummary', attrs: { 'aria-live': 'polite' } }),
+      el('p', { class: 'card-error', id: 'pdfError', attrs: { role: 'alert' } }),
+      el('div', { class: 'card-foot' }, back(c.type === 'whole' ? 'club' : 'group'),
+        el('span', { class: 'note pdf-status', id: 'pdfStatus', attrs: { role: 'status' } }),
+        el('button', { type: 'button', class: 'btn btn-dark', id: 'pdfMake', on: { click: makePdfFromPage } }, icon('doc'), 'Make PDF'))];
+  }
+  box.replaceChildren(
+    el('section', { class: 'card settings-card pdf-simple', attrs: { 'data-step': c.step } },
+      el('div', { class: 'pdf-head' }, el('h2', { text: 'Make a PDF' }), more), trailLine, body),
+    pdfSavingCard());
+  if (c.step === 'make') updatePdfSummary();
+}
+
+/** The "Saving the PDF" card, shown under both versions of the page. */
+function pdfSavingCard() {
+  return el('section', { class: 'card' },
+    el('h2', { text: 'Saving the PDF' }),
+    el('p', { text: 'On a PC the PDF goes to your Downloads folder. On an iPad, Safari asks to download it: tap Download, then open it from the downloads arrow at the top and use Share → Save to Files to put it in OneDrive.' }),
+    el('p', { class: 'note', text: 'Anyone with the board’s address can make these PDFs. They show the plan as it is now; unsaved changes on this device are included.' }));
+}
+
+/** Draw the PDFs page: the simple choices, or the full page under "More options". */
+function renderPdfs() {
+  const c = pdfChoices();
   const box = document.getElementById('pdfsInner');
   // Start loading the libraries now, so Make PDF works straight from the button
   // press (iPad Safari is happiest when a download follows a tap directly).
   loadPdfLibraries().catch(() => { /* reported when Make PDF is pressed */ });
+  if (c.simple) renderPdfsSimple(box); else renderPdfsAdvanced(box);
+}
+
+/** The full PDFs page (Stage 4a), now reached by "More options". */
+function renderPdfsAdvanced(box) {
+  const c = pdfChoices();
+  const s = settings();
 
   const typeList = el('div', { class: 'radio-list', attrs: { role: 'radiogroup', 'aria-label': 'What to make' } },
     PDF_TYPES.map(([value, label, help]) => el('label', { class: 'check-row radio-row' },
@@ -4384,9 +4504,13 @@ function renderPdfs() {
     el('span', { text: 'Include each topic’s members’ briefing' })) : null;
 
   const makeBtn = el('button', { type: 'button', class: 'btn btn-dark', id: 'pdfMake', on: { click: makePdfFromPage } }, icon('doc'), 'Make PDF');
+  // Back to the simple choices: start again at the first step, on the year shown here.
+  const simpler = el('button', { type: 'button', class: 'btn btn-quiet pdf-more', id: 'pdfSimple',
+    on: { click: () => { Object.assign(c, { simple: true, step: 'club' }); setPdfYear(c, DateEngine.parseMonth(c.from).year); renderPdfs(); } } },
+    icon('left'), 'Simple choices');
   box.replaceChildren(
     el('section', { class: 'card settings-card' },
-      el('h2', { text: 'Make a PDF' }),
+      el('div', { class: 'pdf-head' }, el('h2', { text: 'More PDF options' }), simpler),
       el('fieldset', { class: 'set-group' }, el('legend', { text: 'What to make' }), typeList),
       which.length ? el('div', { class: 'set-grid' }, which) : null,
       el('fieldset', { class: 'set-group' }, el('legend', { text: 'Months' }),
@@ -4395,10 +4519,7 @@ function renderPdfs() {
       el('p', { class: 'pdf-summary', id: 'pdfSummary', attrs: { 'aria-live': 'polite' } }),
       el('p', { class: 'card-error', id: 'pdfError', attrs: { role: 'alert' } }),
       el('div', { class: 'card-foot' }, el('span', { class: 'note pdf-status', id: 'pdfStatus', attrs: { role: 'status' } }), makeBtn)),
-    el('section', { class: 'card' },
-      el('h2', { text: 'Saving the PDF' }),
-      el('p', { text: 'On a PC the PDF goes to your Downloads folder. On an iPad, Safari asks to download it: tap Download, then open it from the downloads arrow at the top and use Share → Save to Files to put it in OneDrive.' }),
-      el('p', { class: 'note', text: 'Anyone with the board’s address can make these PDFs. They show the plan as it is now; unsaved changes on this device are included.' })));
+    pdfSavingCard());
   updatePdfSummary();
 }
 
