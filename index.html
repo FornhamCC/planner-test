@@ -1786,6 +1786,13 @@ function categoryOf(code) {
   return s.categories.find(c => c.code === code);
 }
 function clubOf(code) { return settings().clubs.find(c => c.code === code); }
+/** A club's short name ("Fornham"): the Settings short name, else the full name
+    without " Computer Club". Used where the wording should still read correctly
+    if the two clubs are ever merged under one name (Nice to Have 15). */
+function clubShortName(club) {
+  if (!club) return '';
+  return (club.shortName || '').trim() || club.name.replace(/\s*Computer Club\s*$/i, '').trim() || club.code;
+}
 function sessionKey(month, club, cat) { return month + '_' + club + '_' + cat; }
 function parseSessionKey(key) {
   const [month, club, cat] = String(key).split('_');
@@ -2450,7 +2457,7 @@ function buildClubsCard(editable) {
       el('legend', { text: c.code }),
       el('div', { class: 'set-grid' },
         setInput('Full name', c.name, { attrs: { 'data-f': 'name' } }),
-        setInput('Short name (used in the heading)', c.shortName, { attrs: { 'data-f': 'shortName' } }),
+        setInput('Short name (heading and PDFs page)', c.shortName, { attrs: { 'data-f': 'shortName' } }),
         setSelect('Meets on', c.meetingDay, WEEKDAYS, { attrs: { 'data-f': 'meetingDay' } })))),
     el('p', { class: 'note', text: 'The codes (GBCC, FCC) cannot be changed: every tile refers to them.' })
   ];
@@ -4365,8 +4372,8 @@ function pdfChoices() {
 
 /* --- Simple choices (Stage 4c) ------------------------------------------------
    Members choose in up to three short steps, each a row of large buttons:
-     1. Club:  each club, or Both clubs (both = the whole plan, straight to step 3)
-     2. Group: that club's four groups in their board colours, or All four groups
+     1. "Which group?":   each club by short name, or Both (= the whole plan, straight to step 3)
+     2. "Which session?": that club's four sessions in their board colours, or All four
      3. Year:  the current year, with ‹ › to step through years, then Make PDF
    The choices map onto the same PDF types as the full page, so the PDFs are
    identical: one group → 'group', all four → 'club', both clubs → 'whole'.
@@ -4401,25 +4408,30 @@ function renderPdfsSimple(box) {
   const back = (step) => el('button', { type: 'button', class: 'btn btn-quiet pdf-back', on: { click: () => go({ step }) } }, icon('left'), 'Back');
   const more = el('button', { type: 'button', class: 'btn btn-quiet pdf-more', id: 'pdfMore', on: { click: () => go({ simple: false }) } }, 'More options…');
 
-  // What has been chosen so far, e.g. "Fornham Computer Club › FCC iPad Beginners"
+  // What has been chosen so far, e.g. "Fornham › FCC iPad Beginners".
+  // Wording (Nice to Have 15): the clubs are called "groups" here by their short
+  // names (Great Barton / Fornham / Both) and the four sub-groups "sessions", so the
+  // page still reads correctly if the clubs merge under one name.
   const trail = [];
-  if (c.step !== 'club') trail.push(c.type === 'whole' ? 'Both clubs' : clubOf(c.club).name);
+  if (c.step !== 'club') trail.push(c.type === 'whole' ? 'Both' : clubShortName(clubOf(c.club)));
   if (c.step === 'make' && c.type === 'group') trail.push(groupName(...c.group.split('_')));
-  if (c.step === 'make' && c.type === 'club') trail.push('All four groups');
+  if (c.step === 'make' && c.type === 'club') trail.push('All four sessions');
   const trailLine = trail.length ? el('p', { class: 'pdf-trail', id: 'pdfTrail', text: trail.join(' › ') }) : null;
 
   let body;
   if (c.step === 'club') {
-    body = [el('h3', { text: 'Which club?' }),
-      el('div', { class: 'pdf-choices', id: 'pdfClubChoices' },
-        s.clubs.map(k => pdfChoiceButton(k.name, null, () => go({ club: k.code, step: 'group' }))),
-        pdfChoiceButton('Both clubs', 'The whole plan, every group', () => go({ type: 'whole', platform: 'all', step: 'make' })))];
-  } else if (c.step === 'group') {
     body = [el('h3', { text: 'Which group?' }),
+      el('div', { class: 'pdf-choices', id: 'pdfClubChoices' },
+        s.clubs.map(k => pdfChoiceButton(clubShortName(k), null, () => go({ club: k.code, step: 'group' }))),
+        pdfChoiceButton('Both', 'The whole plan, every session', () => go({ type: 'whole', platform: 'all', step: 'make' })))];
+  } else if (c.step === 'group') {
+    // Buttons show the category names ("Windows Beginners"); the trail above already
+    // says which club, and the full group name appears in the trail once chosen.
+    body = [el('h3', { text: 'Which session?' }),
       el('div', { class: 'pdf-choices', id: 'pdfGroupChoices' },
-        CATEGORY_ORDER.map(cat => pdfChoiceButton(groupName(c.club, cat), null,
+        CATEGORY_ORDER.map(cat => pdfChoiceButton((categoryOf(cat) || {}).name || groupName(c.club, cat), null,
           () => go({ type: 'group', group: c.club + '_' + cat, step: 'make' }), categoryOf(cat))),
-        pdfChoiceButton('All four groups', 'Side by side, one row per month', () => go({ type: 'club', step: 'make' }))),
+        pdfChoiceButton('All four', 'Side by side, one row per month', () => go({ type: 'club', step: 'make' }))),
       el('div', { class: 'card-foot' }, back('club'))];
   } else {
     if (!c.year) setPdfYear(c, thisCalendarYear());
