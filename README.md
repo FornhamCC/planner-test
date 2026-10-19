@@ -4,6 +4,8 @@ The tutorial plan for Great Barton (GBCC) and Fornham (FCC) Computer Clubs.
 
 - **Board:** https://fornhamcomputerclub.com/planner/ (until the domain is connected: https://fornhamcc.github.io/planner/)
 - **Date tests:** add `tests/` to the board's address.
+- **How to use it:** [docs/user-manual.md](docs/user-manual.md)
+- **How it is built:** [docs/code-guide.md](docs/code-guide.md)
 - **Setting up from scratch:** [docs/setup-guide.md](docs/setup-guide.md)
 
 ## What is in this repository
@@ -16,7 +18,7 @@ The tutorial plan for Great Barton (GBCC) and Fornham (FCC) Computer Clubs.
 | `vendor/` | jsPDF and jsPDF-AutoTable, used to make the PDFs (MIT licence); see [vendor/README.md](vendor/README.md) |
 | `fonts/` | Atkinson Hyperlegible, kept here so the board needs no other website (SIL Open Font License) |
 | `tests/index.html` | Automated checks of the meeting-date rules, September 2026 to July 2028 |
-| `docs/` | Setup guide and stage testing guides; the user manual and code guide follow at the end of the build |
+| `docs/` | [User manual](docs/user-manual.md), [code guide](docs/code-guide.md), setup guide and the stage testing guides |
 
 ## How it works, in brief
 
@@ -36,4 +38,4 @@ The same `index.html` also runs from a second repository whose name starts `plan
 - **Stage 4a (live from 19 Oct 2026):** PDFs for one group, one club, the whole plan (all, Windows or iPad groups), and all eight groups in one file or separately, between chosen months. Testing guide: [docs/stage4a-testing.md](docs/stage4a-testing.md).
 - **Stage 4b (live from 19 Oct 2026):** Download backup (with a reminder after 90 days); Restore from a backup file; History of the last 30 saves, each viewable, downloadable and restorable; yearly archive at a prompt from January; viewing an archived year read-only on the board and in PDFs. Testing guide: [docs/stage4b-testing.md](docs/stage4b-testing.md).
 - **Stage 4c (live from 19 Oct 2026):** simpler PDFs page: club → group → year with large buttons (the year starts on the current year, ‹ › to step), full choices under More options. Testing guide: [docs/stage4c-testing.md](docs/stage4c-testing.md).
-- **Stage 5 (on the test copy):** PDFs page wording ready for a possible merged club ("Which group?" Great Barton / Fornham / Both, then "Which session?"), names taken from Settings → Clubs short names.
+- **Stage 5 (on the test copy):** PDFs page wording ready for a possible merged club ("Which group?" Great Barton / Fornham / Both, then "Which session?"), names taken from Settings → Clubs short names. Read-only check on a never-unlocked device (automated, PC and iPad). User manual and code guide. Date-engine tests now compare times with Settings.
