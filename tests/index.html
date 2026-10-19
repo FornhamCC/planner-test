@@ -140,12 +140,25 @@ function defineTests(E, S) {
   });
 
   /* --- Times ------------------------------------------------------------------ */
-  test('Times', 'Beginners 12:30–14:00, Main 14:00–16:00 for both clubs', () => {
-    const want = { WB: ['12:30', '14:00'], WM: ['14:00', '16:00'], IB: ['12:30', '14:00'], IM: ['14:00', '16:00'] };
+  // Times are editable in Settings (per category, and per club since Stage 3), so these
+  // checks compare with the board's own settings rather than fixed clock times.
+  test('Times', 'Every group’s sessions use the times set in Settings for that club', () => {
     for (const [c, k] of groups) {
       const s = E.sessionDate(S, '2027-01', c, k);
-      if (s.start !== want[k][0] || s.end !== want[k][1]) return c + ' ' + k + ' is ' + s.start + '–' + s.end;
+      const own = (S.groupTimes || {})[c + '_' + k];
+      const cat = S.categories.find(x => x.code === k);
+      const want = own || cat;
+      if (s.start !== want.start || s.end !== want.end) return c + ' ' + k + ' is ' + s.start + '–' + s.end + ', Settings say ' + want.start + '–' + want.end;
     }
+    return true;
+  });
+  test('Times', 'A club’s own times override the category, for that club only', () => {
+    const copy = JSON.parse(JSON.stringify(S));
+    copy.groupTimes = { GBCC_WB: { start: '12:35', end: '14:05' } };
+    const cat = copy.categories.find(x => x.code === 'WB');
+    const g = E.sessionDate(copy, '2027-01', 'GBCC', 'WB'), f = E.sessionDate(copy, '2027-01', 'FCC', 'WB');
+    if (g.start !== '12:35' || g.end !== '14:05') return 'GBCC WB is ' + g.start + '–' + g.end;
+    if (f.start !== cat.start || f.end !== cat.end) return 'FCC WB changed too: ' + f.start + '–' + f.end;
     return true;
   });
   test('Times', 'formatTime shows 12-hour times without a leading zero', () =>
