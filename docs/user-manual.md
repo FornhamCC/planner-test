@@ -75,19 +75,20 @@ Members need no account and no password. Editing needs a GitHub account and an *
 
 ### The top bar
 
-From left to right:
+The top bar is charcoal, with a gold-to-orange stripe underneath, to match the club website. From left to right:
 
-- **The board's name** and the clubs' names (both can be changed in Settings).
-- **Board · PDFs · Settings** — the three pages.
+- **The F&GB mark**, then **the board's name** and the clubs' names (both names can be changed in Settings).
+- **Board · PDFs · Settings** — the three pages. The page you are on is gold.
 - **The save status.** Members see **View only · updated 17:22** (when the plan was last read). Editors see whether their changes are saved (section 9).
 - **↻ Refresh** — reads the newest copy of the plan now. (It also refreshes by itself: every 5 minutes for members, every minute for editors.)
-- **Unlock editing** — on a device that has no key yet. Once unlocked, this becomes the **Owner** / **Editor** label and the **Edit** switch.
+- **Unlock editing** — on a device that has no key yet. Once unlocked, this becomes the **Owner** / **Editor** label and the **Edit** switch (gold when editing is on).
+- **‹ Club website** — goes back to the club website. It appears only once the website's address has been filled in under Settings › Board and clubs.
 
 On the test copy a brown **TEST COPY** banner runs across the very top: changes there never affect the real plan.
 
 ### The second bar (Board page only)
 
-- **All · Windows · iPad** — show every group, or only the Windows or only the iPad groups. On an iPad held upright, choosing Windows or iPad makes the four columns fit the screen.
+- **All · Windows · iPad** — show every group, or only the Windows or only the iPad groups (the chosen one is gold). On an iPad held upright, choosing Windows or iPad makes the four columns fit the screen.
 - **‹ Oct 2026 – Sep 2027 ›** — the months shown. The arrows step a month at a time; tap the dates themselves to choose **From** and **To**.
 - **This month** — jumps back to the current month.
 - **Showing** — appears only once a year has been archived (section 13); picks the current plan or an archived year.
@@ -104,7 +105,7 @@ Your choices of filter, columns and tray are remembered on each device.
 
 - The **date and times**, e.g. *Mon 18 Jan · 12:30–2:00*.
 - The **topic title**.
-- The **presenter's code** (e.g. **BG**, **RC**) in a dark chip at the top right.
+- The **presenter's code** (e.g. **BG**, **RC**) in gold on a dark chip at the top right.
 - Small symbols: 📎 a paperclip means **tutorial notes are linked**; 📄 a page means a **members' briefing** has been written.
 - Chips that may appear:
   - **Invites sent** (green) — the email invitations for that meeting have gone out.
@@ -113,7 +114,7 @@ Your choices of filter, columns and tray are remembered on each device.
   - **Closed** (red) — the hall is closed that day (a closure from Settings).
   - **Club event** — an AGM or similar.
 
-The current month has a bronze **This month** label. An empty cell with a faint date is a meeting with no topic yet ("To be arranged" in the PDFs).
+The current month has a gold **This month** label and a soft gold tint. An empty cell with a faint date is a meeting with no topic yet ("To be arranged" in the PDFs).
 
 ### Opening a meeting's details
 
@@ -173,7 +174,7 @@ Here you choose **From** and **To** months freely, with quick buttons for a whol
 
 ### In every PDF
 
-Break months are one shaded row; a cancelled meeting says **Cancelled**; a meeting with no topic yet says **To be arranged**; a closed day says **Closed: …**. Colours match the board, and every group name is also printed in words, so a black-and-white printout still reads clearly. Each page shows the title, the months, the page number and the date printed. PDFs show the plan as it is now. A calendar year with very long topic titles can run onto a second page.
+Break months are one shaded row; a cancelled meeting says **Cancelled**; a meeting with no topic yet says **To be arranged**; a closed day says **Closed: …**. Colours match the board, and every group name is also printed in words, so a black-and-white printout still reads clearly. Each page has a charcoal heading band with the title (as on the club website), then the months, the page number and the date printed. PDFs show the plan as it is now. A calendar year with very long topic titles can run onto a second page.
 
 ---
 
@@ -337,7 +338,7 @@ Each card has its own **Save changes** and **Discard** buttons, which wake up wh
 
 | Card | What you can change |
 | --- | --- |
-| **Board and clubs** | The board's title; each club's **full name**, **short name** and **meeting day**. The short names ("Great Barton", "Fornham") are used in the heading and on the PDFs page. The codes GBCC and FCC cannot change, because every tile refers to them |
+| **Board and clubs** | The board's title; the **club website address** (optional — a full address starting `https://`; once filled in, a **Club website** button appears in the top bar); each club's **full name**, **short name** and **meeting day**. The short names ("Great Barton", "Fornham") are used in the heading and on the PDFs page. The codes GBCC and FCC cannot change, because every tile refers to them |
 | **Groups and times** | Each group's name (e.g. "GBCC Windows Beginners"), which week of the month each kind of group meets, and the **start and end times for each club separately** (GBCC starts/ends, FCC starts/ends) |
 | **Weeks and breaks** | The week rule (section 11); the break months and their names (a month that already holds tiles cannot become a break) |
 | **Closures** | Days a hall is closed (e.g. a bank holiday), for one club or both, with a short note |

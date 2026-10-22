@@ -54,7 +54,7 @@ The same `index.html` runs from the **test copy** repository `planner-test`: it 
 | `data/plan.json` | The plan: settings, topics and sessions. **Only the board writes to it.** Never replace it during a release |
 | `data/archive/YYYY.json` | One file per archived calendar year, created by the board's yearly archive |
 | `vendor/` | jsPDF 4.2.1 and jsPDF-AutoTable 5.0.9 (MIT licence), loaded only when PDFs are made. See `vendor/README.md` |
-| `fonts/` | Atkinson Hyperlegible (SIL Open Font License), self-hosted so the page needs no other website |
+| `fonts/` | Atkinson Hyperlegible (body text) and Montserrat 700/800 (headings, header bar; added with the Oct 2026 restyle), both SIL Open Font License, self-hosted so the page needs no other website |
 | `tests/index.html` | The date-engine tests, run in the browser |
 | `docs/` | Setup guide, user manual, this guide, and the testing guides from each stage |
 | `README.md` | Short description and build history |
@@ -128,6 +128,7 @@ One topic taught at both clubs is **one topic and two sessions** pointing to it.
 | Field | Meaning |
 | --- | --- |
 | `boardTitle` | Heading at the top |
+| `websiteUrl` | Optional club website address (must be `https://`). When present, `renderHeader()` shows the **Club website** pill (`#siteLink`); edited in Settings › Board and clubs |
 | `clubs[]` | `{ code, name, shortName, meetingDay }` — codes `GBCC`, `FCC` are fixed |
 | `categories[]` | `{ code, name, platform, start, end, weekFromEnd, colours }` — `weekFromEnd` 2 = second-last meeting week (Windows), 1 = last (iPad) |
 | `groupTimes` | Optional per-club times: `{ "GBCC_WB": { start, end }, … }`, overriding the category's |
@@ -191,6 +192,7 @@ Each section starts with a banner comment like this:
 - **`el(tag, props, …children)`** builds every element. It sets text with `textContent`, never `innerHTML`, so nothing typed into the plan can ever run as code (see section 7). `icon(name)` adds one of the fixed SVG icons from `ICONS`.
 - **One `state`, one `render()`.** Code changes `state`, then calls `render()`, which redraws the visible page. While a tile is being dragged, redrawing waits until the drop; an editable details panel or a Settings card with unsaved typing is never redrawn under the user.
 - **Colours come from settings.** `colourVars(category)` turns a category's colours into CSS custom properties (`--fill`, `--line`, `--strong`, `--ink`) on a tile or button, and the stylesheet uses those.
+- **Club website look (Oct 2026 restyle).** The brand colours are `:root` tokens beside the bronze ones: `--charcoal`, `--cream`, `--gold` (with `--gold-grad` for 3D buttons), `--brand-rule` (the gold → amber → ember stripe under the header) and `--heading` (Montserrat). The charcoal header is `.bar1`; controls inside it have `.bar1 …` rules so the same buttons keep their light look elsewhere. Gold is never used for text on white. The group colours are untouched: they still come only from settings. In the PDFs, `pageFrame()` draws the charcoal heading band (`CHARCOAL`, `GOLD`) above the group's colour strip. On screens up to 1,300 px wide the month names fall back to Atkinson so they fit the narrow month column.
 - **Settings cards** each have a `build…Card(editable)` that draws the card and a `collect…Card(card, settings)` that reads it back, checks it, and returns new settings or throws an `Error('message')` that is shown in red. `settingsCard()` adds Save / Discard and calls `applySettingsChange()`.
 - **Questions** use `ask(title, text, buttons)`, which returns the chosen button's value (a `<dialog>`, so Escape and focus work properly).
 - **Dragging** uses Pointer Events, so one set of code serves mouse, finger and Apple Pencil. A mouse drag starts after 6 px of movement; a finger drag after a 300 ms press-and-hold (so a swipe still scrolls). Press-and-hold then lift without moving opens the menu. Settings in `DRAG` (section 3).

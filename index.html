@@ -46,6 +46,18 @@
   src: url("fonts/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2");
   font-weight: 700; font-style: normal; font-display: swap;
 }
+/* Montserrat: the club website's heading font (Oct 2026 restyle). Also kept in fonts/,
+   used only for headings, labels and the header bar; body text stays Atkinson. */
+@font-face {
+  font-family: "Montserrat";
+  src: url("fonts/montserrat-latin-700-normal.woff2") format("woff2");
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Montserrat";
+  src: url("fonts/montserrat-latin-800-normal.woff2") format("woff2");
+  font-weight: 800; font-style: normal; font-display: swap;
+}
 
 :root {
   /* Ground and surfaces */
@@ -65,6 +77,18 @@
   --bronze-deep: #5C4220;
   --bronze-soft: #FBF4E8;
   --bronze-chip: #F3EADC;
+  /* Club website brand (Oct 2026 restyle): charcoal header, gold for what you press.
+     Rule kept from the website: gold is never used for text on white. */
+  --charcoal: #221E1A;
+  --cream: #F4EFE8;
+  --cream-2: #D9CFC2;
+  --gold: #F2B632;
+  --gold-hi: #F7C95A;
+  --gold-lo: #E2A01E;
+  --gold-soft: #FFF8EC;
+  --gold-grad: linear-gradient(180deg, var(--gold-hi), var(--gold) 55%, var(--gold-lo));
+  --brand-rule: linear-gradient(90deg, #F2B632, #E8812A, #B5541C);
+  --heading: "Montserrat", "Atkinson Hyperlegible", system-ui, sans-serif;
   /* States */
   --ok: #2E6B3A;
   --ok-soft: #E4F2E6;
@@ -126,8 +150,9 @@ label.btn:focus-within { outline: 3px solid var(--bronze); outline-offset: 2px; 
 .btn[disabled] { opacity: .5; cursor: default; }
 .btn-dark { background: var(--ink); color: #FFFFFF; border-color: var(--ink); font-weight: 700; }
 .btn-dark:hover { background: #33312D; }
-.btn-bronze { background: var(--bronze); border-color: var(--bronze); color: var(--ink); font-weight: 700; }
-.btn-bronze:hover { background: #C6A67D; }
+/* The filled accent button is now club gold (Oct 2026 restyle); text stays charcoal. */
+.btn-bronze { background: var(--gold-grad); border-color: var(--gold-lo); color: var(--charcoal); font-weight: 700; }
+.btn-bronze:hover { background: linear-gradient(180deg, #FAD675, #F5BE45 55%, #E8A92A); }
 .btn-outline-bronze { border-color: var(--bronze); }
 .btn-quiet { border-color: transparent; background: transparent; }
 .btn-quiet:hover { background: var(--bronze-chip); }
@@ -135,33 +160,66 @@ label.btn:focus-within { outline: 3px solid var(--bronze); outline-offset: 2px; 
 .btn-icon { width: var(--touch); padding: 0; }
 
 /* --- Header bar 1: identity, views, save status, edit switch ------------ */
+/* Restyled Oct 2026 to match the club website: a charcoal band with the gold
+   F&GB mark, 3D pill buttons, and the website's gold-to-ember rule underneath.
+   border-image paints that rule as a gradient on the bottom border. */
 .bar1 {
-  background: var(--surface);
-  border-bottom: 3px solid var(--bronze);
-  padding: 8px 20px;
+  background: var(--charcoal); color: var(--cream);
+  border-bottom: 5px solid var(--gold);
+  border-image: var(--brand-rule) 1;
+  padding: 10px 20px;
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
 }
-.brand { display: flex; align-items: center; gap: 12px; }
+.bar1 :focus-visible { outline-color: var(--gold); }
+.brand { display: flex; align-items: center; gap: 14px; }
 .brand-mark {
-  width: 44px; height: 44px; border-radius: 10px; background: var(--bronze);
-  display: flex; align-items: center; justify-content: center; color: #FFFFFF;
+  display: flex; flex-direction: column; line-height: 1;
+  padding-right: 14px; border-right: 2px solid var(--bronze);
+  color: var(--gold); text-decoration: none;
 }
-.brand-mark .icon { width: 24px; height: 24px; }
-.brand-title { font-size: 20px; font-weight: 700; line-height: 1.2; }
-.brand-sub { font-size: 14px; color: var(--muted); }
-.views { display: flex; gap: 2px; }
+.brand-mark .fg { font-family: var(--heading); font-weight: 800; font-size: 28px; letter-spacing: .02em; }
+.brand-mark .cc { font-family: var(--heading); font-weight: 700; font-size: 8.5px; letter-spacing: .3em; color: var(--cream); margin-top: 5px; }
+.brand-title {
+  font-family: var(--heading); font-size: 16px; font-weight: 800; line-height: 1.2;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.brand-sub { font-size: 14px; color: var(--cream-2); }
+/* Board / PDFs / Settings: cream-tinted 3D pills; the current view is gold. */
+.views { display: flex; gap: 8px; }
 .views button {
-  border: 0; background: transparent; min-height: var(--touch);
-  padding: 0 14px; font-size: 16px; color: var(--muted);
-  border-bottom: 3px solid transparent;
+  border: 0; min-height: var(--touch); padding: 0 18px; border-radius: 999px;
+  font-family: var(--heading); font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--cream);
+  background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.05));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -2px 0 rgba(0,0,0,.35), 0 2px 5px rgba(0,0,0,.35);
+  transition: transform .15s, background .15s, color .15s;
 }
-.views button[aria-current="page"] { color: var(--ink); font-weight: 700; border-bottom-color: var(--ink); }
+.views button:hover { color: var(--charcoal); background: linear-gradient(180deg, var(--gold-hi), #E9A520); transform: translateY(-1px); }
+.views button[aria-current="page"] {
+  color: var(--charcoal); background: var(--gold-grad);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -2px 0 rgba(120,70,10,.35), 0 3px 8px rgba(0,0,0,.35);
+}
 .bar1-right { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
-.save-status { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
-.save-status[data-tone="ok"] { color: var(--ok); }
-.save-status[data-tone="busy"] { color: var(--bronze-ink); }
-.save-status[data-tone="warn"] { color: var(--warn); }
-.save-status[data-tone="bad"] { color: var(--danger); }
+/* "Club website" link: shown only when Settings holds the website's address. */
+.site-link {
+  display: inline-flex; align-items: center; gap: 8px; min-height: var(--touch); padding: 0 16px 0 12px;
+  border-radius: 999px; text-decoration: none; white-space: nowrap;
+  font-family: var(--heading); font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--cream); background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.05));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -2px 0 rgba(0,0,0,.35), 0 2px 5px rgba(0,0,0,.35);
+}
+.site-link:hover { color: var(--charcoal); background: linear-gradient(180deg, var(--gold-hi), #E9A520); }
+/* Save status on charcoal: lighter tones so they stay readable. */
+.save-status { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--cream-2); }
+.save-status[data-tone="ok"] { color: #A9DDB2; }
+.save-status[data-tone="busy"] { color: var(--gold-hi); }
+.save-status[data-tone="warn"] { color: #FFD27A; }
+.save-status[data-tone="bad"] { color: #FFA79C; }
+/* Buttons that sit in the charcoal bar */
+.bar1 .btn-quiet { color: var(--cream); border: 1px solid rgba(244,239,232,.25); border-radius: 50%; }
+.bar1 .btn-quiet:hover { background: rgba(255,255,255,.10); }
+.bar1 .btn-outline-bronze { background: transparent; color: var(--cream); border-color: var(--gold); border-radius: 999px; }
+.bar1 .btn-outline-bronze:hover { background: var(--gold-grad); color: var(--charcoal); }
 .role-chip {
   font-size: 13px; font-weight: 700; color: var(--bronze-ink);
   background: var(--bronze-chip); border: 1px solid #D9C3A0;
@@ -187,6 +245,15 @@ label.btn:focus-within { outline: 3px solid var(--bronze); outline-offset: 2px; 
 .switch[aria-checked="true"] { border-color: var(--bronze); background: var(--bronze-soft); }
 .switch[aria-checked="true"] .switch-track { background: var(--bronze); }
 .switch[aria-checked="true"] .switch-track::after { transform: translateX(18px); }
+/* The Edit switch in the charcoal bar: cream outline, gold track when on. */
+.bar1 .switch {
+  background: transparent; color: var(--cream); border-color: rgba(244,239,232,.35);
+  font-family: var(--heading); font-size: 13px; letter-spacing: .08em; text-transform: uppercase;
+}
+.bar1 .switch-track { background: #5A5048; }
+.bar1 .switch[aria-checked="true"] { border-color: var(--gold); background: rgba(242,182,50,.12); }
+.bar1 .switch[aria-checked="true"] .switch-track { background: var(--gold); }
+.bar1 .switch[aria-checked="true"] .switch-track::after { background: var(--charcoal); }
 
 /* --- Header bar 2: what you are looking at ------------------------------- */
 .bar2 {
@@ -195,19 +262,24 @@ label.btn:focus-within { outline: 3px solid var(--bronze); outline-offset: 2px; 
   padding: 8px 20px;
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
 }
-.segmented { display: flex; background: #EFEAE2; border-radius: var(--radius); padding: 4px; }
+/* Pill tray; the chosen option is gold (as on the website's Archive tabs). */
+.segmented {
+  display: flex; background: #EAE3D8; border-radius: 999px; padding: 4px;
+  box-shadow: inset 0 2px 4px rgba(34,30,26,.12);
+}
 .segmented button {
   border: 0; background: transparent; min-height: 38px; padding: 0 16px;
-  border-radius: 8px; font-size: 15px; color: #4A4640;
+  border-radius: 999px; font-size: 15px; color: #4A4640;
 }
 .segmented button[aria-pressed="true"] {
-  background: var(--surface); color: var(--ink); font-weight: 700;
-  box-shadow: 0 1px 2px rgba(0,0,0,.12);
+  background: var(--gold-grad); color: var(--charcoal); font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -2px 0 rgba(120,70,10,.30), 0 2px 4px rgba(34,30,26,.18);
 }
 .range { display: flex; align-items: center; gap: 4px; }
 .range-label {
   border: 0; background: transparent; min-height: var(--touch);
-  font-size: 16px; font-weight: 700; padding: 0 10px; border-radius: 8px;
+  font-family: var(--heading); font-size: 15px; font-weight: 800; letter-spacing: .04em;
+  padding: 0 10px; border-radius: 8px;
 }
 .range-label:hover { background: var(--surface-2); }
 .field-inline { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--ink-2); }
@@ -250,18 +322,20 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 1
 .hcell { position: sticky; z-index: 3; }
 .corner {
   position: sticky; left: 0; top: 0; z-index: 5;
-  grid-row: span 2; background: var(--ink); color: #D9C3A0;
-  font-size: 13px; font-weight: 700; letter-spacing: .05em;
+  grid-row: span 2; background: var(--charcoal); color: var(--gold);
+  font-family: var(--heading); font-size: 13px; font-weight: 800; letter-spacing: .14em;
   padding: 12px; display: flex; align-items: flex-end;
 }
 .band {
   top: 0; height: var(--band-h); padding: 8px 12px;
-  display: flex; align-items: center; font-size: 17px; font-weight: 700;
+  display: flex; align-items: center;
+  /* Natural case (not capitals) so names such as "iPad" keep their spelling. */
+  font-family: var(--heading); font-size: 15px; font-weight: 800; letter-spacing: .02em;
   border-top: 6px solid var(--strong, var(--ink));
   background: var(--fill, var(--surface-2)); color: var(--ink-c, var(--ink));
   border-left: 2px solid #FFFFFF;
 }
-.band.dark { background: #2A2825; color: #FFFFFF; border-top-color: var(--bronze); }
+.band.dark { background: var(--charcoal); color: var(--cream); border-top-color: var(--gold); }
 .sub {
   top: var(--band-h); height: var(--sub-h); padding: 0 12px;
   display: flex; align-items: center; gap: 6px;
@@ -276,11 +350,12 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 1
   background: var(--surface); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
   padding: 10px 12px; display: flex; flex-direction: column; gap: 2px;
 }
-.mcell .m { font-size: 18px; font-weight: 700; }
+.mcell .m { font-family: var(--heading); font-size: 16px; font-weight: 800; letter-spacing: .02em; }
 .mcell .y { font-size: 14px; color: var(--muted); }
 .now-chip {
-  align-self: flex-start; margin-top: 4px; font-size: 12px; font-weight: 700;
-  background: var(--bronze); color: var(--ink); border-radius: 6px; padding: 2px 8px; white-space: nowrap;
+  align-self: flex-start; margin-top: 6px;
+  font-family: var(--heading); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  background: var(--gold); color: var(--charcoal); border-radius: 999px; padding: 3px 9px; white-space: nowrap;
 }
 .cell {
   border-bottom: 1px solid var(--line); border-left: 1px dashed #DDD6CB;
@@ -290,14 +365,15 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 1
 .cell.editable-empty { cursor: pointer; }
 .cell .hint { font-size: 13px; color: var(--muted-2); }
 .cell .hint.closed { color: var(--danger); font-weight: 700; }
-.row.is-current > .cell, .row.is-current > .mcell { background: var(--bronze-soft); }
-.row.is-current > .mcell { box-shadow: inset 3px 0 0 var(--bronze); }
+.row.is-current > .cell, .row.is-current > .mcell { background: var(--gold-soft); }
+.row.is-current > .mcell { box-shadow: inset 4px 0 0 var(--gold); }
 .row.is-past .tile { opacity: .62; }
 
 .break-band {
   grid-column: 2 / -1; border-bottom: 1px solid var(--line);
   background: repeating-linear-gradient(135deg, #F3F0EB 0 10px, #EAE5DD 10px 20px);
-  padding: 12px 16px; font-size: 16px; font-weight: 700; color: #4A4640;
+  padding: 12px 16px; color: #4A4640;
+  font-family: var(--heading); font-size: 14px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
   display: flex; align-items: center;
 }
 .row.is-break > .mcell { background: #F3F0EB; color: #4A4640; }
@@ -314,8 +390,8 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 1
 .tile .when { font-size: 13px; font-weight: 700; color: var(--ink-c); }
 .tile .when.moved { color: var(--bronze-deep); }
 .pres {
-  flex-shrink: 0; font-size: 12px; font-weight: 700; letter-spacing: .04em;
-  background: var(--ink); color: #FFFFFF; border-radius: 6px; padding: 2px 7px;
+  flex-shrink: 0; font-family: var(--heading); font-size: 11px; font-weight: 800; letter-spacing: .06em;
+  background: var(--charcoal); color: var(--gold); border-radius: 6px; padding: 3px 7px;
 }
 .tile .title { font-size: 15px; font-weight: 700; line-height: 1.25; color: var(--ink); }
 .tile .flags { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 18px; color: var(--ink-2); }
@@ -332,7 +408,7 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 1
 .page { flex: 1; min-height: 0; overflow: auto; }
 .page-inner { max-width: 880px; display: flex; flex-direction: column; gap: 16px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
-.card h2 { margin: 0 0 4px; font-size: 20px; }
+.card h2 { margin: 0 0 4px; font-family: var(--heading); font-size: 18px; font-weight: 800; letter-spacing: .03em; }
 .card h3 { margin: 16px 0 6px; font-size: 16px; }
 .card p { margin: 6px 0; }
 .card .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
@@ -353,7 +429,7 @@ dialog {
 }
 dialog::backdrop { background: rgba(28,27,25,.45); }
 .dlg-head { padding: 18px 20px 6px; display: flex; align-items: flex-start; gap: 12px; }
-.dlg-head h2 { margin: 0; font-size: 20px; flex: 1; }
+.dlg-head h2 { margin: 0; font-family: var(--heading); font-size: 18px; font-weight: 800; letter-spacing: .03em; flex: 1; }
 .dlg-body { padding: 6px 20px 16px; display: flex; flex-direction: column; gap: 14px; }
 .dlg-foot { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .dlg-foot .right { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
@@ -431,7 +507,7 @@ dialog.sheet[open] { display: flex; }
 }
 .tray-head { padding: 12px 14px 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
 .tray-head .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.tray-head h2 { margin: 0; font-size: 18px; }
+.tray-head h2 { margin: 0; font-family: var(--heading); font-size: 16px; font-weight: 800; letter-spacing: .04em; }
 .tray-head .segmented button { padding: 0 10px; font-size: 14px; min-height: 34px; }
 .tray-list { flex: 1; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; -webkit-overflow-scrolling: touch; }
 .tray-foot { padding: 10px; border-top: 1px solid var(--line); }
@@ -622,7 +698,11 @@ dialog.help-dialog[open] { display: flex; flex-direction: column; }
   .tile .when { font-size: 12px; }
   .tile .title { font-size: 14px; }
   .pres { font-size: 11px; padding: 1px 5px; }
-  .band { font-size: 15px; padding: 6px 8px; }
+  .band { font-size: 13.5px; letter-spacing: 0; padding: 6px 8px; }
+  /* Montserrat is wider than Atkinson: in the narrow iPad month column the month
+     names go back to Atkinson so "September" and "November" still fit. */
+  .mcell .m { font-family: inherit; letter-spacing: 0; }
+  .brand-mark .fg { font-size: 24px; }
   .sub { padding: 0 8px; }
   .field-inline .label-text { display: none; }
 }
@@ -653,7 +733,7 @@ dialog.help-dialog[open] { display: flex; flex-direction: column; }
   <!-- Header bar 1: identity, views, save status, editing -->
   <header class="bar1">
     <div class="brand">
-      <div class="brand-mark" aria-hidden="true"><span class="icon" data-icon="calendar"></span></div>
+      <div class="brand-mark" aria-hidden="true"><span class="fg">F&amp;GB</span><span class="cc">COMPUTER CLUBS</span></div>
       <div>
         <div class="brand-title" id="boardTitle">Topic Planning Board</div>
         <div class="brand-sub" id="boardSub">Great Barton &amp; Fornham Computer Clubs</div>
@@ -670,6 +750,8 @@ dialog.help-dialog[open] { display: flex; flex-direction: column; }
       <span class="role-chip" id="roleChip" hidden></span>
       <button type="button" class="btn btn-outline-bronze" id="unlockBtn" hidden><span class="icon" data-icon="lock"></span>Unlock editing</button>
       <button type="button" class="switch" id="editSwitch" role="switch" aria-checked="false" hidden>Edit<span class="switch-track" aria-hidden="true"></span></button>
+      <!-- Back to the club website. Hidden until settings.websiteUrl holds the site's address. -->
+      <a class="site-link" id="siteLink" href="#" hidden><span class="icon" data-icon="left"></span>Club website</a>
     </div>
   </header>
 
@@ -1914,6 +1996,10 @@ function renderHeader() {
   document.getElementById('boardTitle').textContent = s.boardTitle || 'Topic Planning Board';
   document.getElementById('boardSub').textContent = s.clubs.map(c => c.shortName || c.name).join(' & ') + ' Computer Clubs';
   document.title = s.boardTitle || 'Topic Planning Board';
+  // "Club website" pill: only when Settings holds a safe (https) address for the website.
+  const siteLink = document.getElementById('siteLink');
+  if (isSafeUrl(s.websiteUrl)) { siteLink.href = s.websiteUrl; siteLink.hidden = false; }
+  else siteLink.hidden = true;
 
   document.querySelectorAll('.views button').forEach(b => {
     if (b.dataset.view === state.view) b.setAttribute('aria-current', 'page');
@@ -2447,7 +2533,8 @@ function needText(text, what) {
 function buildClubsCard(editable) {
   const s = settings();
   if (!editable) {
-    return [el('dl', { class: 'kv' }, el('dt', { text: 'Board title' }), el('dd', { text: s.boardTitle })),
+    return [el('dl', { class: 'kv' }, el('dt', { text: 'Board title' }), el('dd', { text: s.boardTitle }),
+        el('dt', { text: 'Club website' }), el('dd', { text: s.websiteUrl || 'Not set' })),
       el('table', { class: 'simple' },
         el('thead', {}, el('tr', {}, el('th', { text: 'Club' }), el('th', { text: 'Short name' }), el('th', { text: 'Code' }), el('th', { text: 'Meets on' }))),
         el('tbody', {}, s.clubs.map(c => el('tr', {}, el('td', { text: c.name }), el('td', { text: c.shortName || '' }), el('td', { text: c.code }),
@@ -2455,6 +2542,9 @@ function buildClubsCard(editable) {
   }
   return [
     setInput('Board title', s.boardTitle, { attrs: { 'data-f': 'boardTitle' } }),
+    // Optional: when filled in, a "Club website" button appears in the header bar.
+    setInput('Club website address (optional, starts https://)', s.websiteUrl,
+      { maxLength: 200, attrs: { 'data-f': 'websiteUrl', type: 'url', inputmode: 'url', autocomplete: 'off', placeholder: 'https://' } }),
     s.clubs.map(c => el('fieldset', { class: 'set-group', attrs: { 'data-club': c.code } },
       el('legend', { text: c.code }),
       el('div', { class: 'set-grid' },
@@ -2466,6 +2556,9 @@ function buildClubsCard(editable) {
 }
 function collectClubsCard(card, s) {
   s.boardTitle = needText(fieldValue(card, 'boardTitle'), 'the board title');
+  const site = fieldValue(card, 'websiteUrl');
+  if (site && (!isSafeUrl(site) || site.length > 200)) throw new Error('The club website address must be a full address starting with https://');
+  if (site) s.websiteUrl = site; else delete s.websiteUrl;
   s.clubs.forEach(c => {
     const box = card.querySelector('[data-club="' + c.code + '"]');
     c.name = needText(fieldValue(box, 'name'), c.code + '’s full name');
@@ -4710,6 +4803,7 @@ const PdfDraw = (() => {
   const LINE = 1.18;               // line height as a multiple of the font size
   const INK = [28, 27, 25], MUTED = [94, 90, 84], RULE = [214, 207, 196], DANGER = [161, 44, 34];
   const BRONZE = [184, 149, 106], BRONZE_INK = [122, 90, 46], BREAK_FILL = [240, 236, 229];
+  const CHARCOAL = [34, 30, 26], GOLD = [242, 182, 50];   // club website brand (Oct 2026)
   const TOP = 27;                  // where tables start on each page, below the page heading
   const BOTTOM = 15;               // room for the footer
 
@@ -4767,13 +4861,18 @@ const PdfDraw = (() => {
   function pageFrame(doc, title, subtitle, strip) {
     const w = doc.internal.pageSize.getWidth(), h = doc.internal.pageSize.getHeight();
     const m = 12;
+    // Club website style (Oct 2026): a charcoal heading band with the title in white
+    // and "F&GB" + the board title in gold, then the group's colour strip beneath it.
+    doc.setFillColor(...CHARCOAL);
+    doc.rect(m, 6, w - 2 * m, 12, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(255, 255, 255);
+    doc.text(text(title), m + 4, 13.8);
+    doc.setFontSize(9.5); doc.setTextColor(...GOLD);
+    doc.text(text('F&GB  ·  ' + (settings().boardTitle || 'Topic Planning Board')), w - m - 4, 13.4, { align: 'right' });
     doc.setFillColor(...strip);
-    doc.rect(m, 8, w - 2 * m, 1.6, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...INK);
-    doc.text(text(title), m, 16.5);
+    doc.rect(m, 18, w - 2 * m, 1.6, 'F');
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...MUTED);
-    doc.text(text(subtitle), m, 21.5);
-    doc.text(text(settings().boardTitle || 'Topic Planning Board'), w - m, 16.5, { align: 'right' });
+    doc.text(text(subtitle), m, 24.4);
     // Footer
     doc.setDrawColor(...RULE); doc.setLineWidth(0.2);
     doc.line(m, h - 10, w - m, h - 10);
