@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-11-01T14:32:34.059Z",
+    "savedAt": "2026-11-01T14:33:30.418Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -286,6 +286,16 @@
       "briefing": "",
       "updatedAt": "2026-11-01T14:32:32.051Z",
       "updatedBy": "bernieonline"
+    },
+    "t_cuaxm437": {
+      "title": "Asia’s an Assistant",
+      "category": "WM",
+      "presenter": "BG",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-11-01T14:33:28.412Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -488,6 +498,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-11-01T14:32:32.052Z",
+      "updatedBy": "bernieonline"
+    },
+    "2026-11_FCC_WM": {
+      "topicId": "t_cuaxm437",
+      "club": "FCC",
+      "category": "WM",
+      "month": "2026-11",
+      "date": "2026-11-17",
+      "start": "14:00",
+      "end": "16:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-11-01T14:33:28.413Z",
       "updatedBy": "bernieonline"
     }
   }
