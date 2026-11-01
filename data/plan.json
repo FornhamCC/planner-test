@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-11-01T14:34:20.215Z",
+    "savedAt": "2026-11-01T14:34:51.605Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -306,6 +306,16 @@
       "briefing": "",
       "updatedAt": "2026-11-01T14:34:18.209Z",
       "updatedBy": "bernieonline"
+    },
+    "t_4k66ysjx": {
+      "title": "AI as an Assisstant",
+      "category": "IM",
+      "presenter": "",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-11-01T14:34:49.600Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -534,6 +544,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-11-01T14:34:18.210Z",
+      "updatedBy": "bernieonline"
+    },
+    "2026-11_FCC_IM": {
+      "topicId": "t_4k66ysjx",
+      "club": "FCC",
+      "category": "IM",
+      "month": "2026-11",
+      "date": "2026-11-24",
+      "start": "14:00",
+      "end": "16:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-11-01T14:34:49.600Z",
       "updatedBy": "bernieonline"
     }
   }
