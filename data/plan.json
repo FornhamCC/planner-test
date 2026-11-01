@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-10-20T16:19:59.497Z",
+    "savedAt": "2026-11-01T14:28:10.848Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -441,19 +441,6 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-10-18T17:27:47.390Z",
-      "updatedBy": "bernieonline"
-    },
-    "2026-11_GBCC_WB": {
-      "topicId": "t_55okjztt",
-      "club": "GBCC",
-      "category": "WB",
-      "month": "2026-11",
-      "date": "2026-11-23",
-      "start": "12:35",
-      "end": "14:00",
-      "status": "planned",
-      "moved": false,
-      "updatedAt": "2026-10-18T17:28:21.352Z",
       "updatedBy": "bernieonline"
     },
     "2026-11_GBCC_WM": {
