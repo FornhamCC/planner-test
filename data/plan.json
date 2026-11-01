@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-11-01T14:40:01.451Z",
+    "savedAt": "2026-11-01T14:42:13.319Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -316,6 +316,16 @@
       "briefing": "",
       "updatedAt": "2026-11-01T14:34:49.600Z",
       "updatedBy": "bernieonline"
+    },
+    "t_jprc233x": {
+      "title": "Intermediate 1",
+      "category": "WB",
+      "presenter": "BG",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-11-01T14:42:11.315Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -429,6 +439,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-11-01T14:34:49.600Z",
+      "updatedBy": "bernieonline"
+    },
+    "2027-01_FCC_WB": {
+      "topicId": "t_jprc233x",
+      "club": "FCC",
+      "category": "WB",
+      "month": "2027-01",
+      "date": "2027-01-19",
+      "start": "12:35",
+      "end": "14:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-11-01T14:42:11.315Z",
       "updatedBy": "bernieonline"
     }
   }
