@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-11-01T14:33:43.437Z",
+    "savedAt": "2026-11-01T14:34:20.215Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -296,6 +296,16 @@
       "briefing": "",
       "updatedAt": "2026-11-01T14:33:41.432Z",
       "updatedBy": "bernieonline"
+    },
+    "t_lb67qrkw": {
+      "title": "AI Apps",
+      "category": "IB",
+      "presenter": "BG",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-11-01T14:34:18.209Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -511,6 +521,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-11-01T14:33:28.413Z",
+      "updatedBy": "bernieonline"
+    },
+    "2026-11_FCC_IB": {
+      "topicId": "t_lb67qrkw",
+      "club": "FCC",
+      "category": "IB",
+      "month": "2026-11",
+      "date": "2026-11-24",
+      "start": "12:45",
+      "end": "14:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-11-01T14:34:18.210Z",
       "updatedBy": "bernieonline"
     }
   }
