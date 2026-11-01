@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-11-01T14:30:18.003Z",
+    "savedAt": "2026-11-01T14:31:13.964Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -266,6 +266,16 @@
       "briefing": "",
       "updatedAt": "2026-11-01T14:30:15.994Z",
       "updatedBy": "bernieonline"
+    },
+    "t_l8s5tfm5": {
+      "title": "AI as an Assisstant",
+      "category": "EV",
+      "presenter": "BG",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-11-01T14:31:11.956Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -428,6 +438,19 @@
       "updatedBy": "bernieonline",
       "invitesSent": false,
       "invitesSentAt": ""
+    },
+    "2026-11_GBCC_WM": {
+      "topicId": "t_l8s5tfm5",
+      "club": "GBCC",
+      "category": "WM",
+      "month": "2026-11",
+      "date": "2026-11-23",
+      "start": "14:00",
+      "end": "16:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-11-01T14:31:11.956Z",
+      "updatedBy": "bernieonline"
     }
   }
 }
