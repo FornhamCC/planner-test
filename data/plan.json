@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-11-01T14:46:04.952Z",
+    "savedAt": "2026-11-01T14:46:18.351Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -376,6 +376,16 @@
       "briefing": "",
       "updatedAt": "2026-11-01T14:46:02.948Z",
       "updatedBy": "bernieonline"
+    },
+    "t_copr7upf": {
+      "title": "Security",
+      "category": "IM",
+      "presenter": "",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-11-01T14:46:16.346Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -586,6 +596,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-11-01T14:46:02.948Z",
+      "updatedBy": "bernieonline"
+    },
+    "2027-02_GBCC_IM": {
+      "topicId": "t_copr7upf",
+      "club": "GBCC",
+      "category": "IM",
+      "month": "2027-02",
+      "date": "2027-02-22",
+      "start": "14:00",
+      "end": "16:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-11-01T14:46:16.346Z",
       "updatedBy": "bernieonline"
     }
   }
