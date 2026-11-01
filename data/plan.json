@@ -2,7 +2,7 @@
   "meta": {
     "format": "gbcc-fcc-topic-board",
     "version": 1,
-    "savedAt": "2026-11-01T14:46:18.351Z",
+    "savedAt": "2026-11-01T14:46:47.791Z",
     "savedBy": "bernieonline"
   },
   "settings": {
@@ -386,6 +386,16 @@
       "briefing": "",
       "updatedAt": "2026-11-01T14:46:16.346Z",
       "updatedBy": "bernieonline"
+    },
+    "t_bou0hnp5": {
+      "title": "X",
+      "category": "IB",
+      "presenter": "",
+      "notesUrl": "",
+      "slidesUrl": "",
+      "briefing": "",
+      "updatedAt": "2026-11-01T14:46:45.787Z",
+      "updatedBy": "bernieonline"
     }
   },
   "sessions": {
@@ -609,6 +619,19 @@
       "status": "planned",
       "moved": false,
       "updatedAt": "2026-11-01T14:46:16.346Z",
+      "updatedBy": "bernieonline"
+    },
+    "2027-02_GBCC_IB": {
+      "topicId": "t_bou0hnp5",
+      "club": "GBCC",
+      "category": "IB",
+      "month": "2027-02",
+      "date": "2027-02-22",
+      "start": "12:45",
+      "end": "14:00",
+      "status": "planned",
+      "moved": false,
+      "updatedAt": "2026-11-01T14:46:45.787Z",
       "updatedBy": "bernieonline"
     }
   }
